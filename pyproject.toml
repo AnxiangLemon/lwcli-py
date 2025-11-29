@@ -1,0 +1,15 @@
+[project]
+name = "lwapi"
+version = "0.0.1"
+description = "Lightweight Python SDK for LwApi (Weixin4.0)"
+authors = [{name="AnxiangLemon", email="AnxiangLemon@163.com"}]
+requires-python = ">=3.9"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+requests = "^2.31"
+pydantic = "^1.10"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

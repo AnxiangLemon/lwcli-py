@@ -1,0 +1,3 @@
+
+class LwApiError(Exception):
+    pass
