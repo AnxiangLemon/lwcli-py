@@ -1,28 +1,17 @@
-
-import requests
-from .exceptions import LwApiError
-from .session import Session
-
-class HttpClient:
-    def __init__(self, base_url: str, session: Session):
-        self.base_url = base_url.rstrip("/")
-        self.session = session
-        self.s = requests.Session()
-
-    def post(self, path, body=None, headers=None, params=None, require_login=True):
-        url = f"{self.base_url}{path}"
-        headers = headers or {}
-        if require_login:
-            if not self.session.is_logged_in():
-                raise LwApiError("请先登录")
-            headers["X-Wxid"] = self.session.wxid
-        r = self.s.post(url, json=body, headers=headers, params=params)
-        return r.json()
+# client.py
+from .config import ClientConfig
+from .transport import SyncHTTPTransport
+from .apis.login import LoginClient
 
 class LwApiClient:
-    def __init__(self, base_url: str):
-        self.session = Session()
-        self.http = HttpClient(base_url, self.session)
+    def __init__(self, base_url: str, timeout: float = 10.0):
+        """初始化 SDK 客户端"""
+        self.config = ClientConfig(base_url=base_url, timeout=timeout)
+        self.transport = SyncHTTPTransport(config=self.config)
+        
+        # 初始化各个子客户端
+        self.login = LoginClient(self.transport)
 
-        from .apis.login import LoginApi
-        self.login = LoginApi(self.http, self.session)
+    def login(self, username: str, password: str) -> bool:
+        """调用登录接口，登录成功后更新 wxid"""
+        return self.login.login(username, password)
