@@ -22,9 +22,15 @@ class QRGetResponse(BaseModel):
     qr_url: str = Field(..., alias="QrUrl", description="二维码的 URL")
     expired_time: int = Field(..., alias="ExpiredTime", description="二维码的过期时间（秒）")
     device_id: str = Field(..., alias="DeviceId", description="设备 ID")
-
+    uuid: str = Field(..., alias="Uuid", description="二维码 ID")
+    
     class Config:
         # 允许字段使用别名
-        allow_population_by_field_name = True
+        validate_by_name  = True
         # 设置别名转换
         alias_generator = alias_generator
+       
+class QRCheckResponse(BaseModel):
+    """扫码状态检查响应体"""
+    status: int = Field(..., description="二维码的状态")
+    expiredTime: int = Field(...,  description="二维码的过期时间（秒）")

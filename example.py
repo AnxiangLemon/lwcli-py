@@ -2,6 +2,7 @@
 from lwapi import LwApiClient
 from lwapi.models.login import ProxyInfo
 
+
 def main():
     # 创建 SDK 客户端实例，设置基础 URL
     client = LwApiClient(base_url="http://localhost:8081")
@@ -12,11 +13,25 @@ def main():
 
     # 获取二维码（用户扫码后登录）
     print("正在获取二维码...")
-    qr_code_url = client.login.get_qr_code(device_id=device_id, proxy=None)  # 调用 LoginClient 获取二维码
-    print(f"请扫描二维码进行登录：{qr_code_url}")  # 输出二维码 URL，用户可以用手机扫描
+    qr_data = client.login.get_qr_code(device_id=device_id, proxy=None)
+    # 使用 qr_data 获取二维码信息
+    print(f"二维码的 URL: {qr_data.qr_url}")
+    # print(f"二维码的 Base64 编码: {qr_data.qr_code}")
+    print(f"二维码过期时间: {qr_data.expired_time} 秒")
+    print(f"设备 ID: {qr_data.device_id}")
+    print(f"Uuid: {qr_data.uuid}") 
+    
+    #根据uuid去定时检测二维码的扫码状态
+    qruuid = qr_data.uuid
+    
 
-    # 等待用户扫码成功后（这个流程需要你根据实际情况处理，比如检查状态）
-    input("按回车键继续，确认二维码扫码成功...")
+  # 调用 check_qr_code 方法检查二维码扫码状态
+    wxid = client.login.check_qr_code(uuid=qruuid)
+
+    if wxid:
+        print(f"成功获取到 wxid: {wxid}")
+    else:
+        print("二维码扫码失败或已过期，请重新生成二维码！")
 
 
 if __name__ == "__main__":
