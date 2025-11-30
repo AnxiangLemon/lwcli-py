@@ -32,5 +32,9 @@ class QRGetResponse(BaseModel):
        
 class QRCheckResponse(BaseModel):
     """扫码状态检查响应体"""
-    status: int = Field(..., description="二维码的状态")
-    expiredTime: int = Field(...,  description="二维码的过期时间（秒）")
+    status: Optional[int] = Field(None, description="二维码的状态")
+    expiredTime: Optional[int] = Field(None, description="二维码的过期时间（秒）")
+
+    class Config:
+        # 配置为允许字段缺失或为None
+        extra = "allow"  # 允许接收未定义的字
