@@ -32,19 +32,11 @@ class QRStatus(IntEnum):
 
 class LoginClient:
     def __init__(self, transport: AsyncHTTPTransport):
-        self.transport = transport
+        self.t = transport 
 
         # 心跳任务控制（支持无限次启停）
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._stop_heartbeat = asyncio.Event()
-
-    # ==================== 统一请求封装 ====================
-    async def _post(self, path: str, **kwargs) -> Any:
-        """统一的 POST 请求 + code 检查"""
-        resp = await self.transport.post(path, **kwargs)
-        if resp.code != 200:
-            raise LoginError(f"{path} 请求失败 [{resp.code}]: {resp.message}")
-        return resp
 
     # ==================== 二维码登录 ====================
     async def get_qr_code(
@@ -54,8 +46,8 @@ class LoginClient:
     ) -> QRGetResponse:
         """获取登录二维码"""
         payload = QRGetRequest(deviceId=device_id, proxy=proxy)
-        resp = await self._post("/Login/QRGet", json=payload.model_dump())
-        return QRGetResponse.model_validate(resp.data)
+        data =  await self.t.post("/Login/QRGet", json=payload.model_dump())
+        return QRGetResponse.model_validate(data)
 
     async def check_qr_code(
         self,
@@ -82,12 +74,12 @@ class LoginClient:
                 raise asyncio.TimeoutError("二维码登录超时")
 
             try:
-                resp = await self._post(f"/Login/QRCheck?uuid={uuid}")
+                data =  await self.t.post(f"/Login/QRCheck?uuid={uuid}")
                 
-                logger.debug(resp.data) #调试数据
+                logger.debug(data) #调试数据
                 
                 
-                data = QRCheckResponse.model_validate(resp.data)
+                data = QRCheckResponse.model_validate(data)
                 current_status = QRStatus(data.status)
                 # 只有状态变化才打印（核心提示
                 if current_status != last_status:
@@ -126,7 +118,7 @@ class LoginClient:
         try:
             while not self._stop_heartbeat.is_set():
                 try:
-                    await self._post("/Login/HeartBeat")
+                    await self.t.post("/Login/HeartBeat")
                     logger.debug("HeartBeat OK")
                 except LoginError as e:
                     if any(kw in str(e).lower() for kw in ["未登录", "invalid", "kick", "logout", "expired", "auth"]):
@@ -178,26 +170,12 @@ class LoginClient:
     # ==================== 其他登录相关接口 ====================
     async def logout(self) -> bool:
         self.stop_heartbeat()
-        try:
-            await self._post("/Login/LogOut")
-            logger.success("退出登录成功")
-            return True
-        except LoginError as e:
-            logger.error(f"退出登录请求失败: {e}")
-            return False
-        except (ConnectError, NetworkError, TimeoutException):
-            logger.warning("退出请求网络失败，但本地已清理")
-            return False
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.exception(f"logout 未知异常: {e}")
-            return False
+        await self.t.post("/Login/LogOut")
 
     async def sec_auto_login(self) -> bool:
         try:
-            resp = await self._post("/Login/SecAutoAuth")
-            logger.debug(resp.data) #调试数据
+            data =  await self.t.post("/Login/SecAutoAuth")
+            logger.debug(data) #调试数据
             logger.success("二次免扫码登录成功")
             return True
         except LoginError as e:
@@ -206,7 +184,7 @@ class LoginClient:
 
     async def awaken(self) -> bool:
         try:
-            await self._post("/Login/Awaken")
+            await self.t.post("/Login/Awaken")
             logger.success("会话唤醒成功")
             return True
         except LoginError as e:
@@ -215,7 +193,7 @@ class LoginClient:
 
     async def report_client_check(self) -> bool:
         try:
-            await self._post("/Login/Reportclientcheck")
+            await self.t.post("/Login/Reportclientcheck")
             logger.info("客户端环境上报成功")
             return True
         except LoginError as e:
@@ -224,7 +202,7 @@ class LoginClient:
 
     async def long_link_create(self) -> bool:
         try:
-            await self._post("/Login/LongLinkCreate")
+            await self.t.post("/Login/LongLinkCreate")
             logger.success("长连接创建成功")
             return True
         except LoginError as e:
@@ -234,7 +212,7 @@ class LoginClient:
     async def long_link_remove(self) -> bool:
         self.stop_heartbeat()
         try:
-            await self._post("/Login/LongRemove")
+            await self.t.post("/Login/LongRemove")
             logger.success("长连接已断开")
             return True
         except LoginError as e:
@@ -242,6 +220,6 @@ class LoginClient:
             return False
 
     async def long_link_query(self) -> Dict[str, Any]:
-        resp = await self._post("/Login/LongQuery")
+        data =  await self.t.post("/Login/LongQuery")
         logger.info("长连接状态查询成功")
-        return resp.data
+        return data

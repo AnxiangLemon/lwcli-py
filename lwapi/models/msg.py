@@ -1,17 +1,17 @@
 # models/msg.py
-from pydantic import BaseModel
+from ..models import BaseModelWithConfig
 from typing import List, Optional
 
-class SKBuiltinString_t(BaseModel):
+class SKBuiltinString_t(BaseModelWithConfig):
     """内置字符串类型"""
     string: Optional[str] = None  # 字符串内容
 
-class SKBuiltinBuffer_t(BaseModel):
+class SKBuiltinBuffer_t(BaseModelWithConfig):
     """内置缓冲区类型"""
     iLen: Optional[int] = None    # 缓冲区长度
     buffer: Optional[bytes] = None  # 缓冲区内容
 
-class AddMsg(BaseModel):
+class AddMsg(BaseModelWithConfig):
     """新增消息结构"""
     msgId: int                    # 消息ID
     fromUserName: SKBuiltinString_t  # 发送者用户名
@@ -27,7 +27,7 @@ class AddMsg(BaseModel):
     newMsgId: Optional[int] = None    # 新消息ID
     msgSeq: Optional[int] = None     # 消息序列号
 
-class SyncMessageResponse(BaseModel):
+class SyncMessageResponse(BaseModelWithConfig):
     """同步消息响应结构"""
     modUserInfos: Optional[List] = []    # 修改的用户信息
     modContacts: Optional[List] = []      # 修改的联系人

@@ -1,5 +1,4 @@
 # lwapi/client.py
-import asyncio
 from .config import ClientConfig
 from .transport import AsyncHTTPTransport
 from .apis.login import LoginClient

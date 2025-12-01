@@ -1,19 +1,20 @@
-# models/base.py
-from pydantic import BaseModel, Field
-from typing import Any
+# lwapi/models/base.py
+from __future__ import annotations
 
-def alias_generator(s: str) -> str:
-    """将字段名转换为响应数据中的字段名"""
-    return s  # 如果你希望字段名不改变，可以直接返回原字段名
+from typing import Generic, TypeVar
+from pydantic import  Field
+from ..models import BaseModelWithConfig
 
-class ResponseResult(BaseModel):
-    """API响应的基础结构"""
-    code: int = Field(..., alias="code", description="返回码")
-    message: str = Field(..., description="错误信息或成功信息")
-    data: Any = Field(None, description="响应数据")
-    
-    class Config:
-        # 使用定义好的 alias_generator 函数来转换字段名
-        alias_generator = alias_generator
-        # 忽略不存在的字段
-        extra = "ignore"
+# 泛型变量，用于让 transport.post 返回具体类型
+T = TypeVar("T")
+
+
+class ApiResponse(BaseModelWithConfig, Generic[T]):
+    """
+    所有 LwApi 接口返回的最外层结构
+    注意：这个类永远不会暴露给业务代码！
+    """
+    code: int = Field(..., description="返回码，200 表示成功")
+    message: str = Field("", description="错误信息")
+    data: T = Field(None, description="真实业务数据")
+

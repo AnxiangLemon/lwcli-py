@@ -40,8 +40,8 @@ class MsgClient:
 
     async def _sync_once(self) -> SyncMessageResponse:
         """单次同步消息"""
-        resp = await self.t.post("/Msg/Sync")
-        return SyncMessageResponse.model_validate(resp.data)
+        data = await self.t.post("/Msg/Sync")
+        return SyncMessageResponse.model_validate(data)
 
     async def _polling_loop(self):
         logger.success("微信消息长轮询已启动")
@@ -133,8 +133,8 @@ class MsgClient:
         if at is not None:
             payload["at"] = at.strip()
 
-        resp = await self.t.post("/Msg/SendTxt", json=payload)
+        data = await self.t.post("/Msg/SendTxt", json=payload)
         
         # 统一返回原始结构，便于你判断成功失败
-        return resp.data
+        return data
     
