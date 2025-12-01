@@ -6,3 +6,6 @@ venv/
 *.logs
 
 accounts.json
+
+bot.py
+getcode.py
