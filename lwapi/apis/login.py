@@ -40,10 +40,10 @@ class LoginClient:
 
     # ==================== 统一请求封装 ====================
     async def _post(self, path: str, **kwargs) -> Any:
-        """统一的 POST 请求 + RetCode 检查"""
+        """统一的 POST 请求 + code 检查"""
         resp = await self.transport.post(path, **kwargs)
-        if resp.RetCode != 200:
-            raise LoginError(f"{path} 请求失败 [{resp.RetCode}]: {resp.message}")
+        if resp.code != 200:
+            raise LoginError(f"{path} 请求失败 [{resp.code}]: {resp.message}")
         return resp
 
     # ==================== 二维码登录 ====================

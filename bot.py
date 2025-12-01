@@ -7,6 +7,8 @@ from loguru import logger
 import qrcode
 from lwapi.models.login import ProxyInfo
 
+from datetime import datetime
+from lwapi.models.msg import SyncMessageResponse
 def generate_colored_qr(data):
     """
     生成二维码
@@ -46,6 +48,30 @@ ACCOUNTS = json.loads(CONFIG_FILE.read_text())
 BASE_URL = "http://localhost:8081"
 
 
+
+# ========== 第一步：定义你的消息处理函数 ==========
+async def on_new_message(resp: SyncMessageResponse):
+    """每当收到新消息，就会自动调用这个函数"""
+    for msg in resp.addMsgs:
+        sender = msg.fromUserName.string or "未知用户"
+        content = msg.content.string or ""
+        time_str = datetime.fromtimestamp(msg.createTime).strftime("%Y-%m-%d %H:%M:%S")
+
+        print("\n" + "="*50)
+        print(f"新消息 [{time_str}]")
+        print(f"发信人: {sender}")
+        print(f"内容: {content}")
+        if msg.pushContent:
+            print(f"通知栏: {msg.pushContent}")
+        print("="*50)
+
+        # 在这里写你的业务逻辑！
+        # 比如：
+        # if "你好" in content:
+        #     await send_text(to_wxid=sender, text="你好！我是机器人")
+        # 或存数据库、发钉钉、触发 webhook 等
+
+
 async def run_one_bot(acc: dict):
     device_id = acc["device_id"]
     remark = acc.get("remark", device_id[:8])
@@ -58,6 +84,14 @@ async def run_one_bot(acc: dict):
             login = client.login
             login_success = False  # 关键标志位！
 
+            # 调试业务接口
+            client.transport._config.set_wxid(saved_wxid)
+           # data = await client.msg.sync()
+           
+            client.msg.start(handler=on_new_message)
+            while True:                          # ← 主线程睡大觉
+                await asyncio.sleep(60)
+            
             try:
                 # 情况1：已经有 wxid → 直接二次登录（最快
                 if saved_wxid:

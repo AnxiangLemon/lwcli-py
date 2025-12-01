@@ -8,7 +8,7 @@ def alias_generator(s: str) -> str:
 
 class ResponseResult(BaseModel):
     """API响应的基础结构"""
-    RetCode: int = Field(..., alias="code", description="返回码")
+    code: int = Field(..., alias="code", description="返回码")
     message: str = Field(..., description="错误信息或成功信息")
     data: Any = Field(None, description="响应数据")
     

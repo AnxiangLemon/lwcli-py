@@ -3,7 +3,7 @@ import asyncio
 from .config import ClientConfig
 from .transport import AsyncHTTPTransport
 from .apis.login import LoginClient
-
+from .apis.msg import MsgClient
 
 class LwApiClient:
     def __init__(self, base_url: str, timeout: float = 10.0):
@@ -11,7 +11,8 @@ class LwApiClient:
         self.config = ClientConfig(base_url=base_url, timeout=timeout)
         self.transport = AsyncHTTPTransport(config=self.config)
         self.login = LoginClient(self.transport)
-
+        self.msg = MsgClient(self.transport)
+        
         # 用于控制整个客户端生命周期
         self._closed = False
 
