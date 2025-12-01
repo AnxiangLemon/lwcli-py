@@ -1,5 +1,7 @@
 venv/
 
+tests/
+
 *.pyc
 
 *.tmp
