@@ -6,9 +6,10 @@ from lwapi import LwApiClient
 from loguru import logger
 import qrcode
 from lwapi.models.login import ProxyInfo
-
+from typing import Dict
 from datetime import datetime
 from lwapi.models.msg import SyncMessageResponse
+
 def generate_colored_qr(data):
     """
     生成二维码
@@ -49,27 +50,32 @@ BASE_URL = "http://localhost:8081"
 
 
 
-# ========== 第一步：定义你的消息处理函数 ==========
-async def on_new_message(resp: SyncMessageResponse):
-    """每当收到新消息，就会自动调用这个函数"""
+# ==================== 全局管理器 ====================
+ACTIVE_BOTS: Dict[str, LwApiClient] = {}
+BOT_LOCKS = asyncio.Lock()  # 防止并发写冲突（极少情况）
+
+
+
+
+# ==================== 统一的强大消息回调 ====================
+async def on_new_message(client: LwApiClient, resp: SyncMessageResponse):
+    """所有账号共用这一个回调，自动区分是谁的消息"""
+    wxid = getattr(client.transport._config, "x_wxid", "unknown")
     for msg in resp.addMsgs:
-        sender = msg.fromUserName.string or "未知用户"
+        sender = msg.fromUserName.string or "unknown"
         content = msg.content.string or ""
-        time_str = datetime.fromtimestamp(msg.createTime).strftime("%Y-%m-%d %H:%M:%S")
+        time_str = datetime.fromtimestamp(msg.createTime).strftime("%m-%d %H:%M:%S")
 
-        print("\n" + "="*50)
-        print(f"新消息 [{time_str}]")
-        print(f"发信人: {sender}")
-        print(f"内容: {content}")
-        if msg.pushContent:
-            print(f"通知栏: {msg.pushContent}")
-        print("="*50)
+        print(f"[{time_str} {wxid} 收到消息] {sender} → {content}")
 
-        # 在这里写你的业务逻辑！
-        # 比如：
-        # if "你好" in content:
-        #     await send_text(to_wxid=sender, text="你好！我是机器人")
-        # 或存数据库、发钉钉、触发 webhook 等
+        # ==================== 这里写你的智能逻辑 ====================
+        if "你好" in content:
+            await client.msg.send_text_message(to_wxid=sender, content="你好！我是机器人~")
+
+        elif content == "在吗":
+            await client.msg.send_text_message(to_wxid=sender, content="在的！有啥事？")
+
+        # 可以继续加：拉群、踢人、发图、改群名、点赞、转发等...
 
 
 async def run_one_bot(acc: dict):
@@ -88,7 +94,14 @@ async def run_one_bot(acc: dict):
             client.transport._config.set_wxid(saved_wxid)
            # data = await client.msg.sync()
            
+            # 注册到全局管理器（Web 面板就是通过这里找你的）
+            async with BOT_LOCKS:
+                    ACTIVE_BOTS[saved_wxid] = client
+
+            logger.success(f"机器人上线 → {remark} | {saved_wxid or '未登录'}")
+            
             client.msg.start(handler=on_new_message)
+            
             while True:                          # ← 主线程睡大觉
                 await asyncio.sleep(60)
             
@@ -138,7 +151,9 @@ async def run_one_bot(acc: dict):
             except Exception as e:
                 logger.error(f"【{remark}】出错: {e}，10秒后重连")
                 await asyncio.sleep(10)
-
+             # 清理：避免僵尸 client
+            async with BOT_LOCKS:
+                ACTIVE_BOTS.pop(saved_wxid, None)
 
 async def main():
     logger.remove()
@@ -159,6 +174,7 @@ async def main():
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+       
         logger.success("全部账号已安全退出，下次运行自动秒登")
 
 
@@ -171,52 +187,3 @@ if __name__ == "__main__":
     except Exception as e:
         # 防止意外崩溃
         logger.exception(f"程序异常崩溃: {e}")
-# async def main():
-#     # 创建 SDK 客户端实例，设置基础 URL
-#     client = LwApiClient(base_url="http://localhost:8081")
-      #     client2 = LwApiClient(base_url="http://localhost:8081")
-#     # 设置设备 ID 和代理（可选）
-#     device_id = "57626334653430613863303265333431"  # 假设设备ID是 device123
-#     # proxy = ProxyInfo(host="proxy.example.com", port=8080, type=1)  # 代理信息（如果有）
-
-#     # 获取二维码（用户扫码后登录）
-#     print("正在获取二维码...")
-#     qr_data = await client.login.get_qr_code(device_id=device_id, proxy=None)
-#     # 使用 qr_data 获取二维码信息
-#     print(f"二维码的 URL: {qr_data.qr_url}")
-#     # print(f"二维码的 Base64 编码: {qr_data.qr_code}")
-#     # print(f"二维码过期时间: {qr_data.expired_time} 秒")
-#     generate_colored_qr("http://weixin.qq.com/x/" + qr_data.uuid)
-#     print(f"下次同一账号登录请用此设备id: {qr_data.device_id}")
-#     print(f"Uuid: {qr_data.uuid}")
-
-#     # 根据uuid去定时检测二维码的扫码状态
-#     qruuid = qr_data.uuid
-
-#     # 调用 check_qr_code 方法检查二维码扫码状态
-#     wxid = await client.login.check_qr_code(uuid=qruuid)
-    
-#     wxid = "wxid_4b9a1yqz3s0322"
-
-#     if wxid:
-#         print(f"登录成功 wxid: {wxid}")
-#         # 设置 wxid 使后续请求带上该 wxid
-#         client.transport._config.set_wxid(wxid)
-#     else:
-#         print("登录失败~")
-#         return
-
-
-#     asyncio.create_task(client.login.send_heartbeat(interval=20))
-
-#     # 保持程序运行，直到某个事件发生（例如手动停止调试）
-#     try:
-#         # 等待直到收到退出信号
-#         await asyncio.Event().wait()
-#     except asyncio.CancelledError:
-#         # 捕获异步任务取消错误，优雅退出
-#         print("程序被取消，正在清理并退出...")
-#     except KeyboardInterrupt:
-#         # 捕获 Ctrl+C 中断程序
-#         print("收到退出信号，正在停止程序...")
-

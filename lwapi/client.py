@@ -13,6 +13,8 @@ class LwApiClient:
         self.login = LoginClient(self.transport)
         self.msg = MsgClient(self.transport)
         
+        # 【关键注入】让 MsgClient 知道自己的“主人”是谁
+        self.msg.client = self   # ← 加上这行就完事了！
         # 用于控制整个客户端生命周期
         self._closed = False
 
