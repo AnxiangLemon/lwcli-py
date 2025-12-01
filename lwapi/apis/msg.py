@@ -1,5 +1,6 @@
 # lwapi/apis/msg.py
 import asyncio
+import httpx
 from loguru import logger
 
 from ..transport import AsyncHTTPTransport
@@ -20,32 +21,35 @@ class MsgClient:
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
         self._handler: Optional[MessageHandler] = None
-        self.interval = 1
+        self.interval = 1.0
 
-    @api_call(return_on_fail=None, log_business=False)
     async def _sync_once(self) -> SyncMessageResponse: 
         """必须明确返回 SyncMessageResponse，装饰器才能正确解析"""
-        result = await self.t.post("/Msg/Sync")
-        return result
+        resp = await self.t.post("/Msg/Sync")
+        return SyncMessageResponse.model_validate(resp.data)
 
     async def _polling_loop(self):
         logger.success("微信消息长轮询已启动")
 
         while not self._stop_event.is_set():
             try:
-                resp: ApiResponse[SyncMessageResponse] = await self._sync_once()
+                #: ApiResponse[SyncMessageResponse] 
+                resp= await self._sync_once()
 
-                if resp and resp.data and resp.data.addMsgs:
-                    logger.info(f"收到 {len(resp.data.addMsgs)} 条新消息")
+                if resp and resp.addMsgs:
+                    logger.info(f"收到 {len(resp.addMsgs)} 条新消息")
                     if self._handler:
-                        await self._handler(resp.data)   # 传的是真正的 SyncMessageResponse 对象
+                        await self._handler(resp)   # 传的是真正的 SyncMessageResponse 对象
 
                 await asyncio.sleep(self.interval)
 
+            except httpx.ReadTimeout:
+                # 忽略 ReadTimeout 异常，继续下次轮询
+                await asyncio.sleep(self.interval)  # 等待一段时间后继续轮询
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.exception(f"轮询异常: {e}")
+                #logger.exception(f"消息轮询异常: {e}")
                 await asyncio.sleep(2)
 
         logger.info("消息轮询已停止")

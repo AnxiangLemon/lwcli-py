@@ -41,7 +41,6 @@ class ApiResponse(Generic[T]):
 def api_call(
     success_code: int = 200,
     return_on_fail: Any = None,
-    log_error: bool = True,  # 网络异常打印 error
     log_business: bool = False,  # 业务失败是否打印 warning（推荐 False，安静）
 ):
     """

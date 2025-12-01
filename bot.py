@@ -106,7 +106,7 @@ async def run_one_bot(acc: dict):
 
                 # 情况2：没有 wxid 或二次失败 → 只能扫二维码
                 if not saved_wxid:
-                    qr = await login.get_qr_code(device_id, proxy=proxy)
+                    qr = await login.get_qr_code(device_id, proxy)
                     print(f"【{remark}】请扫码登录 → {qr.qr_url}")
                     generate_colored_qr("http://weixin.qq.com/x/" + qr.uuid)
                     wxid = await login.check_qr_code(qr.uuid, timeout=300)

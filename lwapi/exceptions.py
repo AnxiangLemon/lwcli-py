@@ -10,9 +10,4 @@ class HttpError(LwApiError):
         self.status_code = status_code
         self.message = message
 
-class ApiError(LwApiError):
-    """API 业务错误异常"""
-    def __init__(self, code: int, message: str):
-        super().__init__(f"API 错误 {code}: {message}")
-        self.code = code
-        self.message = message
+

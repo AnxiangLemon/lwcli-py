@@ -10,7 +10,7 @@ from typing import Optional
 class AsyncHTTPTransport:
     def __init__(self, config: ClientConfig):
         """初始化异步 HTTP 客户端"""
-        self._client = httpx.AsyncClient(timeout=config.timeout, verify=config.verify_ssl)
+        self._client = httpx.AsyncClient(timeout=config.timeout)
         self._config = config
 
     async def post(self, path: str, json: dict = None, x_wxid: Optional[str] = None) -> ResponseResult:
