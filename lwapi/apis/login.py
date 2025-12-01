@@ -177,8 +177,8 @@ class LoginClient:
 
     async def sec_auto_login(self) -> bool:
         try:
-            data = await self.t.post("/Login/SecAutoAuth")
-            logger.debug(data)  # 调试数据
+            await self.t.post("/Login/SecAutoAuth")
+            # 暂时不对这个做 检测 但是可能会失效 我觉得 
             logger.success("二次免扫码登录成功")
             return True
         except LoginError as e:
