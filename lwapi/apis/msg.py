@@ -18,10 +18,6 @@ from typing import Callable, Awaitable, Optional
 from ..transport import AsyncHTTPTransport
 from ..models.msg import SyncMessageResponse
 
-
-# ==================== 新版回调类型：直接传入完整的 LwApiClient ====================
-# 现在你的回调函数签名是：
-# async def on_message(client: LwApiClient, resp: SyncMessageResponse)
 MessageHandler = Callable[["LwApiClient", SyncMessageResponse], Awaitable[None]]
 
 
