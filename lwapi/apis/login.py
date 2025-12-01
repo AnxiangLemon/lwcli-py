@@ -18,13 +18,14 @@ from ..models.login import (
 
 class LoginError(Exception):
     """登录模块专用业务异常"""
+
     pass
 
 
 class QRStatus(IntEnum):
     NOT_SCANNED = 0
     SCANNED = 1
-    CONFIRMING = 2      # 部分接口会返回此状态
+    CONFIRMING = 2  # 部分接口会返回此状态
     EXPIRED = 3
     CANCELED = 4
     EXPIRED_OLD = -2007
@@ -32,7 +33,7 @@ class QRStatus(IntEnum):
 
 class LoginClient:
     def __init__(self, transport: AsyncHTTPTransport):
-        self.t = transport 
+        self.t = transport
 
         # 心跳任务控制（支持无限次启停）
         self._heartbeat_task: Optional[asyncio.Task] = None
@@ -46,7 +47,7 @@ class LoginClient:
     ) -> QRGetResponse:
         """获取登录二维码"""
         payload = QRGetRequest(deviceId=device_id, proxy=proxy)
-        data =  await self.t.post("/Login/QRGet", json=payload.model_dump())
+        data = await self.t.post("/Login/QRGet", json=payload.model_dump())
         return QRGetResponse.model_validate(data)
 
     async def check_qr_code(
@@ -56,29 +57,30 @@ class LoginClient:
         interval: int = 5,
         timeout: int = 300,  # 总超时秒数，比 max_retries 更直观
     ) -> str:
-        """
-        轮询检查二维码状态
-
-        Returns:
-            登录成功后返回的 token / wxid（根据实际接口字段而定）
-
-        Raises:
-            LoginError: 二维码过期、取消或接口错误
-            asyncio.TimeoutError: 超时
-        """
         deadline = asyncio.get_event_loop().time() + timeout
         last_status = None  # 记录上一次的状态，避免重复打印
-        
+
         while True:
             if asyncio.get_event_loop().time() > deadline:
                 raise asyncio.TimeoutError("二维码登录超时")
 
             try:
-                data =  await self.t.post(f"/Login/QRCheck?uuid={uuid}")
-                
-                logger.debug(data) #调试数据
-                
-                
+                data = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+                # ====================== 统一提取 baseResponse ======================
+                base_resp = data.get("baseResponse", {})
+                ret = base_resp.get("ret") if isinstance(base_resp, dict) else None
+                err_msg = (
+                    base_resp.get("errMsg", {}).get("string")
+                    if isinstance(base_resp.get("errMsg"), dict)
+                    else base_resp.get("errMsg")
+                )
+
+                if ret == 0 and data.get("acctSectResp", {}).get("userName"):
+                    wxid = data["acctSectResp"]["userName"]
+                    nickname = data["acctSectResp"].get("nickName", "")
+                    logger.success(f"登录成功！wxid={wxid} ({nickname})")
+                    return wxid
+
                 data = QRCheckResponse.model_validate(data)
                 current_status = QRStatus(data.status)
                 # 只有状态变化才打印（核心提示
@@ -87,11 +89,6 @@ class LoginClient:
                         logger.info("等待微信扫码...（请打开微信扫一扫）")
                     elif current_status is QRStatus.SCANNED:
                         logger.info("已扫码！请在手机微信上点【登录】确认")
-                    elif current_status is QRStatus.CONFIRMING:
-                        logger.info("正在登录，请稍等...")
-                        # TODO 主要是为了获取wxid 或者其他信息
-                        # 根据返回值 来确定登录的结果 有可能是登录失败  低版本
-                        return  ""
                     elif current_status in (QRStatus.EXPIRED, QRStatus.EXPIRED_OLD):
                         logger.error("二维码已过期")
                         raise LoginError("二维码已过期")
@@ -99,8 +96,12 @@ class LoginClient:
                         logger.error("二维码已被取消")
                         raise LoginError("二维码已被取消")
 
-                last_status = current_status
-                
+                    last_status = current_status
+
+                elif ret is not None and ret != 0:
+                    logger.error("登录失败 ret=%s, msg=%s", ret, err_msg or "未知错误")
+                    raise LoginError(f"登录失败: {err_msg or 'ret=' + str(ret)}")
+
             except LoginError:
                 raise
             except (ConnectError, NetworkError, TimeoutException) as e:
@@ -108,22 +109,23 @@ class LoginClient:
             except Exception as e:
                 logger.error(f"检查二维码异常: {e}")
 
-            await asyncio.sleep(min(interval, deadline - asyncio.get_event_loop().time()))
+            await asyncio.sleep(
+                min(interval, deadline - asyncio.get_event_loop().time())
+            )
 
     # ==================== 永久心跳（支持重复登录） ====================
-    async def _heartbeat_worker(self, interval: int = 150) -> None:
-        logger.info("心跳任务启动")
+    async def _heartbeat_worker(self, interval: int = 60) -> None:
         self._stop_heartbeat.clear()
 
         try:
             while not self._stop_heartbeat.is_set():
                 try:
                     await self.t.post("/Login/HeartBeat")
-                    logger.debug("HeartBeat OK")
+                
+                except httpx.ReadTimeout:
+                # 长轮询超时是正常现象，继续下一次
+                    continue
                 except LoginError as e:
-                    if any(kw in str(e).lower() for kw in ["未登录", "invalid", "kick", "logout", "expired", "auth"]):
-                        logger.error(f"会话已失效，停止心跳: {e}")
-                        return
                     logger.warning(f"心跳业务异常（将继续）: {e}")
                 except (ConnectError, NetworkError, TimeoutException):
                     logger.warning("网络波动，5秒后重试")
@@ -137,7 +139,9 @@ class LoginClient:
 
                 # 可取消的等待
                 try:
-                    await asyncio.wait_for(self._stop_heartbeat.wait(), timeout=interval)
+                    await asyncio.wait_for(
+                        self._stop_heartbeat.wait(), timeout=interval
+                    )
                 except asyncio.TimeoutError:
                     continue
 
@@ -152,8 +156,7 @@ class LoginClient:
         self.stop_heartbeat()  # 先确保干净
 
         self._heartbeat_task = asyncio.create_task(
-            self._heartbeat_worker(interval),
-            name="LoginClient-Heartbeat"
+            self._heartbeat_worker(interval), name="LoginClient-Heartbeat"
         )
         logger.success("心跳已启动")
 
@@ -174,8 +177,8 @@ class LoginClient:
 
     async def sec_auto_login(self) -> bool:
         try:
-            data =  await self.t.post("/Login/SecAutoAuth")
-            logger.debug(data) #调试数据
+            data = await self.t.post("/Login/SecAutoAuth")
+            logger.debug(data)  # 调试数据
             logger.success("二次免扫码登录成功")
             return True
         except LoginError as e:
@@ -220,6 +223,6 @@ class LoginClient:
             return False
 
     async def long_link_query(self) -> Dict[str, Any]:
-        data =  await self.t.post("/Login/LongQuery")
+        data = await self.t.post("/Login/LongQuery")
         logger.info("长连接状态查询成功")
         return data

@@ -10,6 +10,7 @@ from typing import Dict
 from datetime import datetime
 from lwapi.models.msg import SyncMessageResponse
 
+
 def generate_colored_qr(data):
     """
     生成二维码
@@ -27,6 +28,7 @@ def generate_colored_qr(data):
     # 打印ASCII字符形式的二维码
     qr.print_ascii(invert=True)
 
+
 # ==================== 配置文件 ====================
 CONFIG_FILE = Path("accounts.json")
 
@@ -35,10 +37,9 @@ if not CONFIG_FILE.exists():
     example = [
         {
             "device_id": "57626334653430613863303265333431",
-            "wxid": "wxid_4b9a1yqz3s0322",           # 第一次留空，扫码后自动填充
+            "wxid": "wxid_4b9a1yqz3s0322",  # 第一次留空，扫码后自动填充
             "remark": "主号",
-            "proxy": None   # 可以改成 {"host": "127.0.0.1", "port": 1080, "type": 1}
-
+            "proxy": None,  # 可以改成 {"host": "127.0.0.1", "port": 1080, "type": 1}
         }
     ]
     CONFIG_FILE.write_text(json.dumps(example, indent=2, ensure_ascii=False))
@@ -49,12 +50,9 @@ ACCOUNTS = json.loads(CONFIG_FILE.read_text())
 BASE_URL = "http://localhost:8081"
 
 
-
 # ==================== 全局管理器 ====================
 ACTIVE_BOTS: Dict[str, LwApiClient] = {}
 BOT_LOCKS = asyncio.Lock()  # 防止并发写冲突（极少情况）
-
-
 
 
 # ==================== 统一的强大消息回调 ====================
@@ -70,7 +68,9 @@ async def on_new_message(client: LwApiClient, resp: SyncMessageResponse):
 
         # ==================== 这里写你的智能逻辑 ====================
         if "你好" in content:
-            await client.msg.send_text_message(to_wxid=sender, content="你好！我是机器人~")
+            await client.msg.send_text_message(
+                to_wxid=sender, content="你好！我是机器人~"
+            )
 
         elif content == "在吗":
             await client.msg.send_text_message(to_wxid=sender, content="在的！有啥事？")
@@ -84,27 +84,12 @@ async def run_one_bot(acc: dict):
     saved_wxid = acc.get("wxid", "").strip()
     proxy_dict = acc.get("proxy")  # 可能是 None 或 dict
     proxy = ProxyInfo(**proxy_dict) if proxy_dict else None
-    
+
     while True:
         async with LwApiClient(base_url=BASE_URL) as client:
             login = client.login
             login_success = False  # 关键标志位！
 
-            # 调试业务接口
-            client.transport._config.set_wxid(saved_wxid)
-           # data = await client.msg.sync()
-           
-            # 注册到全局管理器（Web 面板就是通过这里找你的）
-            async with BOT_LOCKS:
-                    ACTIVE_BOTS[saved_wxid] = client
-
-            logger.success(f"机器人上线 → {remark} | {saved_wxid or '未登录'}")
-            
-            client.msg.start(handler=on_new_message)
-            
-            while True:                          # ← 主线程睡大觉
-                await asyncio.sleep(60)
-            
             try:
                 # 情况1：已经有 wxid → 直接二次登录（最快
                 if saved_wxid:
@@ -127,7 +112,9 @@ async def run_one_bot(acc: dict):
                     # 登录成功！保存 wxid 到手 → 永久保存
                     saved_wxid = wxid
                     acc["wxid"] = wxid
-                    CONFIG_FILE.write_text(json.dumps(ACCOUNTS, indent=2, ensure_ascii=False))
+                    CONFIG_FILE.write_text(
+                        json.dumps(ACCOUNTS, indent=2, ensure_ascii=False)
+                    )
                     client.transport._config.set_wxid(saved_wxid)
                     logger.success(f"【{remark}】二维码登录成功，已保存 wxid: {wxid}")
                     login_success = True
@@ -135,14 +122,20 @@ async def run_one_bot(acc: dict):
                 # 3. 只有真正登录成功，才允许开启心跳！！
                 if login_success:
                     login.start_heartbeat(interval=20)
-                    logger.info(f"【{remark}】心跳已启动，进入主业务循环")
 
+                    # 注册到全局管理器（Web 面板就是通过这里找你的）
+                    async with BOT_LOCKS:
+                        ACTIVE_BOTS[saved_wxid] = client
+
+                    client.msg.start(handler=on_new_message)
                     # ==================== 你的业务主循环 ====================
                     while True:
                         await asyncio.sleep(60)
                     # =======================================================
                 else:
-                    logger.error(f"【{remark}】登录完全失败，本轮不开启心跳，10秒后重试")
+                    logger.error(
+                        f"【{remark}】登录完全失败，本轮不开启心跳，10秒后重试"
+                    )
                     await asyncio.sleep(10)
 
             except asyncio.CancelledError:
@@ -151,9 +144,10 @@ async def run_one_bot(acc: dict):
             except Exception as e:
                 logger.error(f"【{remark}】出错: {e}，10秒后重连")
                 await asyncio.sleep(10)
-             # 清理：避免僵尸 client
+            # 清理：避免僵尸 client
             async with BOT_LOCKS:
                 ACTIVE_BOTS.pop(saved_wxid, None)
+
 
 async def main():
     logger.remove()
@@ -161,7 +155,9 @@ async def main():
 
     print(f"正在启动 {len(ACCOUNTS)} 个微信账号...")
     tasks = [
-        asyncio.create_task(run_one_bot(acc), name=f"Bot-{acc.get('remark','unknown')}")
+        asyncio.create_task(
+            run_one_bot(acc), name=f"Bot-{acc.get('remark', 'unknown')}"
+        )
         for acc in ACCOUNTS
     ]
 
@@ -174,7 +170,7 @@ async def main():
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-       
+
         logger.success("全部账号已安全退出，下次运行自动秒登")
 
 
@@ -187,3 +183,18 @@ if __name__ == "__main__":
     except Exception as e:
         # 防止意外崩溃
         logger.exception(f"程序异常崩溃: {e}")
+
+        #     # 调试业务接口
+        #     client.transport._config.set_wxid(saved_wxid)
+        #    # data = await client.msg.sync()
+
+        #     # 注册到全局管理器（Web 面板就是通过这里找你的）
+        #     async with BOT_LOCKS:
+        #             ACTIVE_BOTS[saved_wxid] = client
+
+        #     logger.success(f"机器人上线 → {remark} | {saved_wxid or '未登录'}")
+
+        #     client.msg.start(handler=on_new_message)
+
+        # while True:                          # ← 主线程睡大觉
+        #     await asyncio.sleep(60)
