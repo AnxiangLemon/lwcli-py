@@ -1,0 +1,123 @@
+2025-12-01 23:21:59.186 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:21:59.186 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:21:59.187 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:21:59.187 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:21:59.187 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:21:59.187 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:22:00.491 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:22:27.476 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 2 条新消息
+2025-12-01 23:22:36.270 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:22:36.271 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:22:36.271 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:22:36.271 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:22:57.715 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:22:57.715 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:22:57.715 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:22:57.715 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:22:57.716 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:22:57.716 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:22:57.933 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:22:59.862 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:22:59.863 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:22:59.863 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:22:59.864 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:23:42.688 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:23:42.688 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:23:42.689 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:23:42.689 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:23:42.689 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:23:42.689 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:23:42.852 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 3 条新消息
+2025-12-01 23:23:45.094 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 2 条新消息
+2025-12-01 23:24:31.213 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:24:31.213 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:24:31.213 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:24:31.214 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:24:32.758 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:24:32.759 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:24:32.759 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:24:32.759 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:24:32.759 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:24:32.759 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:24:32.974 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:24:35.395 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:24:45.963 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:26:04.231 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:26:04.231 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:26:04.231 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:26:04.232 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:26:09.093 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:26:09.094 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:26:09.094 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:26:09.094 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:26:09.094 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:26:09.095 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:26:09.318 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:26:11.675 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:26:16.436 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:26:49.763 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:26:49.763 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:26:49.763 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:26:49.764 | ERROR    | lwapi.apis.msg:_polling_loop:70 - 消息轮询异常: HTTP 0: network error: 
+2025-12-01 23:26:51.441 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:26:51.441 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:26:51.441 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:26:51.441 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:26:51.441 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:26:51.441 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:26:52.684 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 2 条新消息
+2025-12-01 23:26:56.197 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:27:38.683 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:31:13.183 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:31:13.184 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:31:13.184 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:31:13.184 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:31:14.776 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:31:14.777 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:31:14.777 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:31:14.778 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:31:14.778 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:31:14.780 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:31:15.080 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:31:16.231 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:31:20.936 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:00.492 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:32:00.492 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:32:00.492 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:32:00.493 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:32:02.448 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:32:02.449 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:32:02.449 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:32:02.449 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:32:02.449 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:32:02.450 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:32:02.662 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:04.938 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:09.288 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:22.341 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:43.607 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:32:56.457 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:32:56.458 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:32:56.458 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:32:56.459 | INFO     | lwapi.apis.msg:_polling_loop:73 - 消息轮询已停止
+2025-12-01 23:32:58.757 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:32:58.758 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:32:58.758 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:32:58.758 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:32:58.758 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:32:58.758 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:33:00.072 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:33:02.358 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:33:09.571 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:34:24.246 | INFO     | lwapi.apis.login:stop_heartbeat:171 - 正在停止心跳任务...
+2025-12-01 23:34:24.247 | INFO     | lwapi.apis.login:_heartbeat_worker:149 - 心跳任务正常取消
+2025-12-01 23:34:24.247 | INFO     | lwapi.apis.login:_heartbeat_worker:152 - 心跳任务已彻底结束
+2025-12-01 23:34:24.247 | ERROR    | lwapi.apis.msg:_polling_loop:70 - 消息轮询异常: HTTP 0: network error: 
+2025-12-01 23:34:36.162 | SUCCESS  | lwapi.apis.login:sec_auto_login:182 - 二次免扫码登录成功
+2025-12-01 23:34:36.162 | SUCCESS  | src.login_service:login:21 - 【主号】二次登录成功 → wxid_4b9a1yqz3s0322
+2025-12-01 23:34:36.162 | SUCCESS  | lwapi.apis.login:start_heartbeat:161 - 心跳已启动
+2025-12-01 23:34:36.162 | SUCCESS  | lwapi.apis.msg:start:89 - 消息长轮询启动成功
+2025-12-01 23:34:36.162 | SUCCESS  | src.bot_manager:run_single_bot:49 - 【主号】机器人已上线！
+2025-12-01 23:34:36.163 | SUCCESS  | lwapi.apis.msg:_polling_loop:43 - 微信消息长轮询已启动
+2025-12-01 23:34:37.581 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息
+2025-12-01 23:34:38.711 | INFO     | lwapi.apis.msg:_polling_loop:50 - 收到 1 条新消息

@@ -37,7 +37,7 @@ if not CONFIG_FILE.exists():
     example = [
         {
             "device_id": "57626334653430613863303265333431",
-            "wxid": "wxid_4b9a1yqz3s0322",  # 第一次留空，扫码后自动填充
+            "wxid": "",  # 第一次留空，扫码后自动填充
             "remark": "主号",
             "proxy": None,  # 可以改成 {"host": "127.0.0.1", "port": 1080, "type": 1}
         }
@@ -128,10 +128,8 @@ async def run_one_bot(acc: dict):
                         ACTIVE_BOTS[saved_wxid] = client
 
                     client.msg.start(handler=on_new_message)
-                    # ==================== 你的业务主循环 ====================
                     while True:
                         await asyncio.sleep(60)
-                    # =======================================================
                 else:
                     logger.error(
                         f"【{remark}】登录完全失败，本轮不开启心跳，10秒后重试"
