@@ -6,15 +6,21 @@ from .account_loader import load_accounts, save_accounts
 from .login_service import LoginService
 from .message_handler import default_message_handler
 from .utils import setup_logger
+import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件
+load_dotenv()
+
+# 从环境变量读取，缺省用本地调试地址
+BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
 
 ACTIVE_BOTS = {}
 BOT_LOCK = asyncio.Lock()
-BASE_URL = "http://localhost:8081"
-BASE_URL2 = "http://103.91.208.68:8081"
 
 
 async def start_all_bots():
-    accounts = load_accounts()                      # ← 只读一次
+    accounts = load_accounts()  # ← 只读一次
     logger.info(f"准备启动 {len(accounts)} 个账号")
 
     tasks = []
@@ -36,7 +42,7 @@ async def run_single_bot(acc: dict, all_accounts: list):
     proxy = acc.get("proxy")
 
     while True:
-        async with LwApiClient(BASE_URL2) as client:
+        async with LwApiClient(BASE_URL) as client:
             try:
                 login_service = LoginService(client, device_id, proxy, remark)
                 result = await login_service.login(saved_wxid)
@@ -50,7 +56,7 @@ async def run_single_bot(acc: dict, all_accounts: list):
                 acc["device_id"] = real_device_id
                 acc["wxid"] = wxid
                 save_accounts(all_accounts)
-                
+
                 client.login.start_heartbeat(interval=20)
                 async with BOT_LOCK:
                     ACTIVE_BOTS[wxid] = client

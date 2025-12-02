@@ -6,7 +6,7 @@ tests/
 
 *.tmp
 *.log
-
+.env
 accounts.json
 
 bot.py
