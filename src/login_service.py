@@ -28,8 +28,10 @@ class LoginService:
         url = f"http://weixin.qq.com/x/{qr.uuid}"
         print_qr_terminal(url)
 
-        root_logger.info(f"【{self.remark}】请用微信扫码 → {url}")
+        root_logger.info(f"【{self.remark}】设备id → {qr.device_id}")
+        root_logger.info(f"【{self.remark}】请用微信扫码 → {qr.qr_url}")
         wxid = await login.check_qr_code(qr.uuid, timeout=300)
 
+        self.client.transport._config.set_wxid(wxid)
         root_logger.success(f"【{self.remark}】登录成功！wxid = {wxid}")
-        return wxid
+        return wxid,qr.device_id

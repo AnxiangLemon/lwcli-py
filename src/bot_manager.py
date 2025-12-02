@@ -10,37 +10,47 @@ from .utils import setup_logger
 ACTIVE_BOTS = {}
 BOT_LOCK = asyncio.Lock()
 BASE_URL = "http://localhost:8081"
+BASE_URL2 = "http://103.91.208.68:8081"
+
 
 async def start_all_bots():
-    accounts = load_accounts()
+    accounts = load_accounts()                      # ← 只读一次
     logger.info(f"准备启动 {len(accounts)} 个账号")
 
     tasks = []
     for acc in accounts:
-        task = asyncio.create_task(run_single_bot(acc))
+        # 把整个 accounts 列表传进去！
+        task = asyncio.create_task(run_single_bot(acc, accounts))
         tasks.append(task)
 
     await asyncio.gather(*tasks, return_exceptions=True)
 
-async def run_single_bot(acc: dict):
-    logger = setup_logger(acc.get("remark", acc["device_id"][:8]))
+
+# 增加一个参数：all_accounts
+async def run_single_bot(acc: dict, all_accounts: list):
+    remark = acc.get("remark", acc["device_id"][:8])
+    logger = setup_logger(remark)
+
     device_id = acc["device_id"]
-    remark = acc.get("remark", device_id[:8])
     saved_wxid = acc.get("wxid", "").strip()
     proxy = acc.get("proxy")
 
     while True:
-        async with LwApiClient(BASE_URL) as client:
+        async with LwApiClient(BASE_URL2) as client:
             try:
                 login_service = LoginService(client, device_id, proxy, remark)
-                wxid = await login_service.login(saved_wxid)
+                result = await login_service.login(saved_wxid)
+                if isinstance(result, tuple):
+                    wxid, real_device_id = result
+                else:
+                    wxid = result
+                    real_device_id = device_id
 
-                # 登录成功 → 保存 wxid
-                if not saved_wxid:
-                    acc["wxid"] = wxid
-                    save_accounts(load_accounts())
-
-                # 启动心跳 + 消息监听
+                # 关键 3 行！扫码成功立刻永久保存
+                acc["device_id"] = real_device_id
+                acc["wxid"] = wxid
+                save_accounts(all_accounts)
+                
                 client.login.start_heartbeat(interval=20)
                 async with BOT_LOCK:
                     ACTIVE_BOTS[wxid] = client
@@ -48,7 +58,6 @@ async def run_single_bot(acc: dict):
                 client.msg.start(handler=default_message_handler)
                 logger.success(f"【{remark}】机器人已上线！")
 
-                # 保持运行
                 while True:
                     await asyncio.sleep(60)
 
