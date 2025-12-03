@@ -9,6 +9,8 @@ else:
     # 运行时用字符串，避免循环导入
     LwApiClient = None  # type: ignore  # ← 第3行：骗过 Ruff
 
+import aiohttp
+import base64
 import asyncio
 import httpx
 from loguru import logger
@@ -132,5 +134,55 @@ class MsgClient:
         data = await self.t.post("/Msg/SendTxt", json=payload)
         
         # 统一返回原始结构，便于你判断成功失败
+        return data
+    
+
+    async def send_image_by_url(
+        self,
+        to_wxid: str,
+        image_url: str,
+        timeout: int = 30,
+    ) -> dict:
+        """
+        发送图片消息（支持传入图片 URL，自动下载并转 Base64）
+
+        Args:
+            to_wxid: 接收者 wxid（个人）或群ID（群聊，如 xxx@chatroom）
+            image_url: 图片的直链 URL（支持 jpg/png/gif/webp 等常见格式）
+            timeout: 下载超时时间（秒），默认 30 秒
+
+        Returns:
+            dict: 原始返回结果，包含 code, data, message
+                  成功时 data 中通常有 msg_id 等信息
+
+        Raises:
+            ValueError: 下载失败或图片过大
+            aiohttp.ClientError: 网络异常
+        """
+        # Step 1: 下载图片并转为 Base64
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+                async with session.get(image_url) as resp:
+                    if resp.status != 200:
+                        raise ValueError(f"图片下载失败，HTTP {resp.status}: {image_url}")
+                    
+                    image_bytes = await resp.read()
+                    
+                    # 可选：限制大小（微信单张图片建议 ≤ 10MB）
+                    if len(image_bytes) > 5 * 1024 * 1024:
+                        raise ValueError(f"图片过大（{len(image_bytes)/1024/1024:.2f}MB），微信限制建议 ≤ 5MB")
+                    
+                    base64_str = base64.b64encode(image_bytes).decode('utf-8')
+                    logger.debug(base64_str)
+        except Exception as e:
+            raise ValueError(f"图片下载或编码失败: {str(e)}") from e
+
+        # Step 2: 调用原始发送图片接口
+        payload = {
+            "toWxid": to_wxid,
+            "base64": base64_str
+        }
+
+        data = await self.t.post("/Msg/UploadImg", json=payload)
         return data
     

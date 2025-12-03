@@ -33,6 +33,8 @@ async def default_message_handler(client, resp: SyncMessageResponse):
         elif "菜单" in content or "help" in content.lower():
             help_text = "我是AI机器人，支持：\n1. 自动回复\n2. 拉群\n3. 发图片\n4. 改备注\n输入 功能+空格+参数 试试"
             await client.msg.send_text_message(to_wxid=sender, content=help_text)
-
+        elif "pic" in content :
+            image_url = "http://103.40.14.118:12347/images/temp/53587046100@chatroom-wxid_fjnkvacehloh11-1764765791.png"
+            await client.msg.send_image_by_url(sender, image_url)
         # 继续加：发图文、卡片、撤回、好友管理、朋友圈、收藏……全都可以在这加
         # =========================================================================
