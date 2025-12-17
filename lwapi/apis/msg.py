@@ -173,7 +173,6 @@ class MsgClient:
                         raise ValueError(f"图片过大（{len(image_bytes)/1024/1024:.2f}MB），微信限制建议 ≤ 5MB")
                     
                     base64_str = base64.b64encode(image_bytes).decode('utf-8')
-                    logger.debug(base64_str)
         except Exception as e:
             raise ValueError(f"图片下载或编码失败: {str(e)}") from e
 

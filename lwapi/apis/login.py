@@ -1,7 +1,7 @@
 # lwapi/apis/login.py
 import asyncio
 from enum import IntEnum
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any,Tuple
 
 import httpx
 from httpx import ConnectError, NetworkError, TimeoutException
@@ -26,9 +26,35 @@ class QRStatus(IntEnum):
     NOT_SCANNED = 0
     SCANNED = 1
     CONFIRMING = 2  # 部分接口会返回此状态
-    EXPIRED = 3
     CANCELED = 4
-    EXPIRED_OLD = -2007
+    EXPIRED = -2007
+
+
+def _extract_ret_errmsg(payload: dict) -> Tuple[Optional[int], Optional[str]]:
+    """兼容 baseResponse 不存在 / errMsg 结构不一致的情况。"""
+    base = payload.get("baseResponse")
+    if not isinstance(base, dict):
+        return None, None
+
+    ret = base.get("ret")
+    err = base.get("errMsg")
+
+    # errMsg 可能是 {"string": "..."} 或直接是字符串
+    if isinstance(err, dict):
+        err = err.get("string")
+    if err is not None:
+        err = str(err)
+    return ret, err
+
+
+def _extract_login_user(payload: dict) -> Tuple[Optional[str], Optional[str]]:
+    """登录成功时，从 acctSectResp 提取 wxid/nickname。"""
+    acct = payload.get("acctSectResp")
+    if not isinstance(acct, dict):
+        return None, None
+    wxid = acct.get("userName")
+    nickname = acct.get("nickName") or ""
+    return wxid, nickname
 
 
 class LoginClient:
@@ -50,68 +76,95 @@ class LoginClient:
         data = await self.t.post("/Login/QRGet", json=payload.model_dump())
         return QRGetResponse.model_validate(data)
 
+   
     async def check_qr_code(
         self,
         uuid: str,
         *,
-        interval: int = 5,
-        timeout: int = 300,  # 总超时秒数，比 max_retries 更直观
+        interval: float = 5,
+        timeout: float = 300,
     ) -> str:
-        deadline = asyncio.get_event_loop().time() + timeout
-        last_status = None  # 记录上一次的状态，避免重复打印
+        """
+        轮询检测二维码状态：
+        - 状态变化才打提示
+        - verifyUrl 只提示一次（即使状态不变也能提示）
+        - 网络异常做轻量退避，避免刷屏+压接口
+        """
 
-        while True:
-            if asyncio.get_event_loop().time() > deadline:
-                raise asyncio.TimeoutError("二维码登录超时")
+        last_status: Optional["QRStatus"] = None
+        last_verify_url: Optional[str] = None
+        net_failures = 0  # 连续网络失败次数，用于退避
 
-            try:
-                data = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
-                # ====================== 统一提取 baseResponse ======================
-                base_resp = data.get("baseResponse", {})
-                ret = base_resp.get("ret") if isinstance(base_resp, dict) else None
-                err_msg = (
-                    base_resp.get("errMsg", {}).get("string")
-                    if isinstance(base_resp.get("errMsg"), dict)
-                    else base_resp.get("errMsg")
-                )
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    try:
+                        payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+                        net_failures = 0  # 一旦成功请求就清零
 
-                if ret == 0 and data.get("acctSectResp", {}).get("userName"):
-                    wxid = data["acctSectResp"]["userName"]
-                    nickname = data["acctSectResp"].get("nickName", "")
-                    logger.success(f"登录成功！wxid={wxid} ({nickname})")
-                    return wxid
+                        ret, err_msg = _extract_ret_errmsg(payload)
+                        logger.debug(f"QRCheck response: ret={ret}, errMsg={err_msg}, data={payload}")
 
-                data = QRCheckResponse.model_validate(data)
-                current_status = QRStatus(data.status)
-                # 只有状态变化才打印（核心提示
-                if current_status != last_status:
-                    if current_status is QRStatus.NOT_SCANNED:
-                        logger.info("等待微信扫码...（请打开微信扫一扫）")
-                    elif current_status is QRStatus.SCANNED:
-                        logger.info("已扫码！请在手机微信上点【登录】确认")
-                    elif current_status in (QRStatus.EXPIRED, QRStatus.EXPIRED_OLD):
-                        logger.error("二维码已过期")
-                        raise LoginError("二维码已过期")
-                    elif current_status is QRStatus.CANCELED:
-                        logger.error("二维码已被取消")
-                        raise LoginError("二维码已被取消")
+                        # 1) 成功：ret=0 且有 userName
+                        wxid, nickname = _extract_login_user(payload)
+                        if ret == 0 and wxid:
+                            logger.success(f"登录成功！wxid={wxid} ({nickname})")
+                            return wxid
 
-                    last_status = current_status
+                        # 2) 过期：直接异常退出
+                        if ret == QRStatus.EXPIRED:
+                            logger.error("二维码已过期")
+                            raise LoginError("二维码已过期")
 
-                elif ret is not None and ret != 0:
-                    logger.error("登录失败 ret=%s, msg=%s", ret, err_msg or "未知错误")
-                    raise LoginError(f"登录失败: {err_msg or 'ret=' + str(ret)}")
+                        # 3) 解析扫码状态（允许 extra，不影响 verifyUrl）
+                        qr = QRCheckResponse.model_validate(payload)
 
-            except LoginError:
-                raise
-            except (ConnectError, NetworkError, TimeoutException) as e:
-                logger.warning(f"网络异常: {e}")
-            except Exception as e:
-                logger.error(f"检查二维码异常: {e}")
+                        # 4) verifyUrl：不依赖状态变化，只要出现/变化就提示一次
+                        verify_url = getattr(qr, "verifyUrl", None) or payload.get("verifyUrl")
+                        if verify_url and verify_url != last_verify_url:
+                            logger.warning(f"检测到安全验证链接，请手动访问完成验证：\n{verify_url}")
+                            last_verify_url = verify_url
 
-            await asyncio.sleep(
-                min(interval, deadline - asyncio.get_event_loop().time())
-            )
+                        # 5) 状态机提示：只在状态变化时输出
+                        status_val = getattr(qr, "status", None)
+                        current_status: Optional["QRStatus"] = None
+                        if status_val is not None:
+                            current_status = QRStatus(status_val)
+
+                        if current_status is not None and current_status != last_status:
+                            if current_status is QRStatus.NOT_SCANNED:
+                                logger.info("等待微信扫码...（请打开微信扫一扫）")
+                            elif current_status is QRStatus.SCANNED:
+                                # 扫码了但未确认
+                                logger.info("已扫码！请在手机微信上点【登录】确认")
+                            elif current_status is QRStatus.CANCELED:
+                                logger.error("二维码已被取消")
+                                raise LoginError("二维码已被取消")
+                            last_status = current_status
+
+                        # 6) 其它 ret 错误：只有 ret 明确非 0 才算“失败”
+                        if ret is not None and ret != 0:
+                            logger.error(f"登录失败 ret={ret}, msg={err_msg or '未知错误'}")
+                            raise LoginError(f"登录失败: {err_msg or 'ret=' + str(ret)}")
+
+                    except LoginError:
+                        raise
+                    except (ConnectError, NetworkError, TimeoutException) as e:
+                        # 网络异常：warning + 退避（避免刷屏）
+                        net_failures += 1
+                        logger.warning(f"网络异常({net_failures})：{e}")
+                    except Exception as e:
+                        # 其它异常：带堆栈，但不让它疯狂刷屏（同样用退避）
+                        net_failures += 1
+                        logger.exception(f"检查二维码异常({net_failures})：{e}")
+
+                    # 退避睡眠：interval * 2^k，上限 30s（你可调）
+                    backoff = min(30.0, interval * (2 ** min(net_failures, 3)))
+                    await asyncio.sleep(max(0.2, backoff))
+
+        except TimeoutError:
+            # asyncio.timeout 抛的是 TimeoutError，这里换成你想要的信息
+            raise asyncio.TimeoutError("二维码登录超时")
 
     # ==================== 永久心跳（支持重复登录） ====================
     async def _heartbeat_worker(self, interval: int = 60) -> None:

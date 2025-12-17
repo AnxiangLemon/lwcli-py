@@ -52,7 +52,6 @@ async def run_single_bot(acc: dict, all_accounts: list):
                     wxid = result
                     real_device_id = device_id
 
-                # 关键 3 行！扫码成功立刻永久保存
                 acc["device_id"] = real_device_id
                 acc["wxid"] = wxid
                 save_accounts(all_accounts)

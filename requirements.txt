@@ -3,3 +3,4 @@ qrcode[pil]
 Pillow
 pydantic>=2.0
 python-dotenv
+aiohttp

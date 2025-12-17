@@ -1,5 +1,5 @@
 # models/login.py
-from pydantic import  Field,BaseModel
+from pydantic import  Field,BaseModel,ConfigDict
 from typing import Optional
 from ..models import BaseModelWithConfig
 
@@ -26,8 +26,14 @@ class QRGetResponse(BaseModelWithConfig):
        
 class QRCheckResponse(BaseModel):
     """扫码状态检查响应体"""
-    status: Optional[int] = Field(None, description="二维码的状态")
-    expiredTime: Optional[int] = Field(None, description="二维码的过期时间（秒）")
+    model_config = ConfigDict(extra="allow")  # 继续允许未定义字段
 
-    class Config:
-        extra = "allow"  # 允许接收未定义的字
+    uuid: Optional[str] = Field(None, description="二维码UUID")
+    status: Optional[int] = Field(None, description="二维码状态")
+    expiredTime: Optional[int] = Field(None, description="二维码过期时间（秒）")
+
+    nickName: Optional[str] = Field(None, description="扫码人昵称")
+    headImgUrl: Optional[str] = Field(None, description="扫码人头像")
+    pushLoginUrlexpiredTime: Optional[int] = Field(None, description="推送登录链接过期时间")
+
+    verifyUrl: Optional[str] = Field(None, description="安全验证链接（如 weixin110）")
