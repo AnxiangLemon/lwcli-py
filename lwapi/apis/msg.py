@@ -125,7 +125,7 @@ class MsgClient:
             dict: 原始返回结果，包含 code, data, message
         """
         payload = {
-            "to_wxid": to_wxid,
+            "toWxid": to_wxid,
             "content": content,
         }
         if at is not None:
