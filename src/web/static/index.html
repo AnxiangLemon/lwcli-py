@@ -58,9 +58,17 @@
 
     <section id="view-plugins" class="view-panel" aria-label="插件管理">
       <div class="card">
-        <div class="plugins-placeholder">
-          <h3>插件管理</h3>
-          <p>此分组预留给后续插件安装、启用与配置。当前版本仅占位。</p>
+        <h2>消息插件</h2>
+        <p class="subtitle" style="margin-top:0;margin-bottom:14px">
+          勾选后保存即写入 <code>config/plugins.json</code>；已运行的机器人会在<strong>下一轮消息批次</strong>起生效（无需重启进程）。
+        </p>
+        <p class="subtitle" style="margin-top:0;margin-bottom:14px;color:var(--muted)">
+          执行顺序为下列从上到下的顺序（与勾选先后无关）。
+        </p>
+        <div id="plugins-list" class="plugin-list">加载中…</div>
+        <div class="plugin-actions">
+          <button type="button" class="btn btn-primary" onclick="savePlugins()">保存启用列表</button>
+          <span id="plugins-save-hint" class="plugins-hint" aria-live="polite"></span>
         </div>
       </div>
     </section>
@@ -77,6 +85,7 @@
       const nav = document.querySelector('.nav-link[data-nav="' + name + '"]');
       if (nav) nav.classList.add('is-active');
       if (name === 'logs') populateLogAccountSelectFromCache();
+      if (name === 'plugins') loadPluginsPanel();
     }
 
     async function fetchJson(url, options = {}) {
@@ -436,6 +445,63 @@
         await refreshAccounts({ soft: false });
       } catch (e) {
         alert(e.message);
+      }
+    }
+
+    let _pluginCatalog = [];
+
+    async function loadPluginsPanel() {
+      const host = document.getElementById('plugins-list');
+      const hint = document.getElementById('plugins-save-hint');
+      if (hint) hint.textContent = '';
+      if (!host) return;
+      host.textContent = '加载中…';
+      try {
+        const data = await fetchJson('/api/plugins');
+        _pluginCatalog = data.plugins || [];
+        const enabled = new Set(data.enabled || []);
+        if (!_pluginCatalog.length) {
+          host.textContent = '暂无已注册插件。';
+          return;
+        }
+        host.innerHTML = _pluginCatalog
+          .map(function (p) {
+            const on = enabled.has(p.id);
+            return (
+              '<label class="plugin-row" data-plugin-id="' + esc(p.id) + '">' +
+              '<input type="checkbox" data-plugin-id="' + esc(p.id) + '"' + (on ? ' checked' : '') + ' />' +
+              '<span class="plugin-body">' +
+              '<span class="plugin-title">' + esc(p.title) + '</span>' +
+              '<code class="plugin-id">' + esc(p.id) + '</code>' +
+              '<span class="plugin-desc">' + esc(p.description || '') + '</span>' +
+              '</span></label>'
+            );
+          })
+          .join('');
+      } catch (e) {
+        host.textContent = e.message || String(e);
+      }
+    }
+
+    async function savePlugins() {
+      const hint = document.getElementById('plugins-save-hint');
+      const ordered = [];
+      _pluginCatalog.forEach(function (p) {
+        const row = document.querySelector('.plugin-row[data-plugin-id="' + p.id + '"]');
+        if (!row) return;
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) ordered.push(p.id);
+      });
+      try {
+        await fetchJson('/api/plugins', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: ordered }),
+        });
+        if (hint) hint.textContent = '已保存（' + ordered.length + ' 个启用）';
+      } catch (e) {
+        alert(e.message);
+        if (hint) hint.textContent = '';
       }
     }
 

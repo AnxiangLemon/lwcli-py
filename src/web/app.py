@@ -8,6 +8,8 @@ from aiohttp import web, WSMsgType
 from loguru import logger
 
 from src.account_loader import load_accounts_safe, save_accounts
+from src.plugins.registry import REGISTRY, list_plugin_specs
+from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
 from src.services.account_slot import account_slot_key
 from src.services.bot_service import BotService
@@ -37,6 +39,8 @@ class AdminWebApp:
                 web.post("/api/accounts/{idx}/start", self.api_start_one),
                 web.post("/api/accounts/{idx}/stop", self.api_stop_one),
                 web.post("/api/start-all", self.api_start_all),
+                web.get("/api/plugins", self.api_plugins_get),
+                web.put("/api/plugins", self.api_plugins_put),
             ]
         )
         return app
@@ -176,6 +180,44 @@ class AdminWebApp:
         accounts = load_accounts_safe()
         await self.bot_service.start_all(accounts)
         return web.json_response({"ok": True, "count": len(accounts)})
+
+    async def api_plugins_get(self, request: web.Request) -> web.Response:
+        specs = list_plugin_specs()
+        return web.json_response(
+            {
+                "plugins": [
+                    {"id": p.id, "title": p.title, "description": p.description}
+                    for p in specs
+                ],
+                "enabled": load_enabled_ids(),
+            }
+        )
+
+    async def api_plugins_put(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        raw = body.get("enabled")
+        if not isinstance(raw, list):
+            return web.json_response({"error": "enabled 须为字符串 id 数组"}, status=400)
+        ids = [str(x).strip() for x in raw if str(x).strip()]
+        unknown = [i for i in ids if i not in REGISTRY]
+        if unknown:
+            return web.json_response(
+                {"error": "未知插件 id", "unknown": unknown},
+                status=400,
+            )
+        # 去重且保持前端传入顺序
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for i in ids:
+            if i in seen:
+                continue
+            seen.add(i)
+            ordered.append(i)
+        save_enabled_ids(ordered)
+        return web.json_response({"ok": True, "enabled": ordered})
 
 
 def create_app() -> web.Application:
