@@ -1,3 +1,16 @@
+"""
+多账号机器人运行时：每个账号一个 asyncio.Task，内部循环为「登录 → 收消息」。
+
+职责概要：
+- 使用 account_slot_key 作为任务字典键（备注+device_id），避免 device_id 重复时冲突；
+- 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
+- 登录成功后启动心跳与消息轮询，消息处理委托给 message_handler.default_message_handler
+  （其内部为可配置的插件链）。
+
+注意：若构造本类时不传入 account_events，则二维码登录无法推送界面（emit 为空会失败），
+正常 Web 入口应始终注入 EventHub。
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,11 +22,10 @@ from loguru import logger
 
 from lwapi import LwApiClient
 
-from src.account_loader import save_accounts
+from src.account_loader import account_slot_key, save_accounts
 from src.login_service import LoginService
 from src.message_handler import default_message_handler
 from src.runtime.account_events import AccountEventHub
-from src.services.account_slot import account_slot_key
 from src.utils import setup_logger
 
 load_dotenv()
@@ -21,7 +33,7 @@ BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
 
 
 class BotService:
-    """机器人运行管理：启动流程与 bot.py 一致（缓存登录 → 否则扫码），Web 端通过 EventHub 推送扫码状态。"""
+    """管理多个账号机器人协程的启动、停止与运行槽位查询。"""
 
     def __init__(self, account_events: Optional[AccountEventHub] = None) -> None:
         self._tasks: Dict[str, asyncio.Task] = {}
@@ -31,11 +43,13 @@ class BotService:
 
     @property
     def login_pending_indices(self) -> Set[int]:
+        """正在登录（含等扫码）的账号在 accounts.json 中的下标集合。"""
         return set(self._login_pending)
 
     async def start_one(
         self, account: dict, all_accounts: list, account_idx: int
     ) -> None:
+        """若该槽位尚无活跃任务，则为该账号启动 _run_single_bot 协程。"""
         slot = account_slot_key(account)
         async with self._lock:
             if slot in self._tasks and not self._tasks[slot].done():
@@ -46,13 +60,16 @@ class BotService:
             )
 
     async def start_all(self, accounts: list) -> None:
+        """顺序尝试启动列表中每个账号（已运行的槽位会被 start_one 跳过）。"""
         for i, account in enumerate(accounts):
             await self.start_one(account, accounts, i)
 
     def running_slot_keys(self) -> list[str]:
+        """返回当前未结束的机器人任务对应的 account_slot_key 列表。"""
         return [k for k, v in self._tasks.items() if not v.done()]
 
     async def stop_for_account(self, account: dict) -> bool:
+        """按账号行取消对应任务；若本来未运行则返回 False。"""
         slot = account_slot_key(account)
         async with self._lock:
             task = self._tasks.pop(slot, None)
@@ -69,6 +86,7 @@ class BotService:
     async def _run_single_bot(
         self, acc: dict, all_accounts: list, account_idx: int
     ) -> None:
+        """单账号主循环：异常后 sleep 再重连，直至任务被取消。"""
         remark = acc.get("remark", acc["device_id"][:8])
         bot_logger = setup_logger(remark)
 
@@ -136,4 +154,3 @@ class BotService:
                         await asyncio.sleep(10)
         finally:
             self._login_pending.discard(account_idx)
-

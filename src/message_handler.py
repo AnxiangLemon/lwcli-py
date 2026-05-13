@@ -1,7 +1,7 @@
-# src/message_handler.py
-"""LwApi 消息入口（兼容旧 import 名 default_message_handler）。
+"""
+LwApi 消息回调的统一入口（历史名称 default_message_handler）。
 
-业务逻辑请放到 src/plugins/ 下的内置或自研插件，并在运维台「插件管理」中启用。
+BotService 仍从此处 import；实际逻辑在 plugins.chain 中按配置串联多个插件。
 """
 
 from src.plugins.chain import composite_message_handler as default_message_handler

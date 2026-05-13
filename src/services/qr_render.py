@@ -1,9 +1,10 @@
 """
-微信网页扫码二维码渲染。
+微信扫码用二维码的本地渲染（PNG → Base64）。
 
-说明：接口返回的 QrBase64 往往不是标准 PNG data URL，直接在浏览器里当图片用容易失败。
-终端脚本 bot.py 使用的是「uuid → http://weixin.qq.com/x/{uuid} → qrcode 库生成图案」，
-这里采用同一策略生成 PNG 再 base64，保证网页 <img> 能稳定显示。
+说明：LWAPI 返回的 QrBase64 往往不是标准 PNG，浏览器 <img> 直接展示易失败。
+本模块用 uuid 拼出 weixin.qq.com 扫码链，再用 qrcode 库生成 PNG，与常见 bot 脚本一致。
+
+被 LoginService（推送运维台图片）等调用。
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import qrcode
 
 
 def weixin_scan_url(uuid: str) -> str:
-    """与 bot.generate_colored_qr 使用的数据一致：微信网页版扫码链接。"""
+    """微信网页扫码链接（与 uuid 一一对应）。"""
     return f"http://weixin.qq.com/x/{uuid.strip()}"
 
 

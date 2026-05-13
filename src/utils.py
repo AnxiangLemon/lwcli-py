@@ -1,8 +1,16 @@
-# src/utils.py
+"""
+通用工具：控制台+文件日志、按账号日志路径、原子写 JSON、简单时间字符串。
+
+被 account_loader、各服务与 web 层复用；与业务无关的纯函数尽量放此处，
+避免在业务模块里散落重复实现。
+"""
+
+from __future__ import annotations
+
 import json
+from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -14,8 +22,8 @@ _LOGGER_INITIALIZED = False
 
 def setup_logger(name: str = "bot"):
     """
-    每个账号单独一个按日期滚动的日志文件：logs/{name}_YYYY-MM-DD.log
-    不再向 Web 实时合并推送，避免与分文件策略混在一起。
+    为「逻辑名」（通常账号备注）注册按日期滚动的文件日志：logs/{name}_YYYY-MM-DD.log。
+    首次调用时还会配置带颜色的控制台输出。
     """
     global _LOGGER_INITIALIZED
     if not _LOGGER_INITIALIZED:
@@ -38,14 +46,14 @@ def setup_logger(name: str = "bot"):
 
 
 def account_log_file_path(remark: str, date_str: Optional[str] = None) -> Path:
-    """与 setup_logger(name) 生成的文件名规则一致（按自然日）。"""
+    """与 setup_logger(name) 生成的按日文件名规则一致。"""
     d = date_str or datetime.now().strftime("%Y-%m-%d")
     name = (remark or "").strip() or "bot"
     return LOG_DIR / f"{name}_{d}.log"
 
 
 def read_account_today_log_tail(remark: str, lines: int = 50) -> Dict[str, Any]:
-    """读取当日该备注对应的日志文件末尾若干行（用于运维台按需查看）。"""
+    """读取当日该备注对应日志文件末尾若干行，供运维台「日志」页展示。"""
     lines = max(1, min(200, int(lines)))
     path = account_log_file_path(remark)
     if not path.exists():
@@ -70,7 +78,7 @@ def read_account_today_log_tail(remark: str, lines: int = 50) -> Dict[str, Any]:
 
 
 def atomic_write_json(path: Path, data) -> None:
-    """防止多进程/多协程写坏配置文件"""
+    """先写临时文件再 replace，降低并发写 JSON 时文件半写入的概率。"""
     text = json.dumps(data, indent=2, ensure_ascii=False)
     with NamedTemporaryFile("w", dir=path.parent, delete=False, encoding="utf-8") as f:
         f.write(text)
@@ -79,4 +87,5 @@ def atomic_write_json(path: Path, data) -> None:
 
 
 def now_str() -> str:
+    """简短人类可读时间串，供业务日志拼接（可选）。"""
     return datetime.now().strftime("%m-%d %H:%M:%S")

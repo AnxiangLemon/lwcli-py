@@ -1,3 +1,10 @@
+"""
+内置插件：演示用关键词自动回复（文本消息）。
+
+可复制本文件改出自己的业务插件，并在 registry.py 中注册；
+运维台勾选后才会加载进处理链。
+"""
+
 from __future__ import annotations
 
 from datetime import datetime

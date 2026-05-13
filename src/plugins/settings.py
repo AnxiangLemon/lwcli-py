@@ -1,3 +1,10 @@
+"""
+插件启用列表的持久化与缓存：读写 config/plugins.json。
+
+enabled 为字符串 id 数组，顺序即消息处理时插件执行顺序；文件 mtime 变化后
+load_enabled_ids 会自动失效缓存，便于运维台保存后下一轮消息即生效。
+"""
+
 from __future__ import annotations
 
 import json
@@ -14,6 +21,7 @@ _cached_enabled: List[str] | None = None
 
 
 def _ensure_file() -> None:
+    """首次使用时若不存在则写入默认启用列表。"""
     if PLUGIN_CONFIG.exists():
         return
     PLUGIN_CONFIG.parent.mkdir(parents=True, exist_ok=True)
@@ -22,6 +30,7 @@ def _ensure_file() -> None:
 
 
 def invalidate_plugin_settings_cache() -> None:
+    """保存配置后调用，强制下次重新读盘（亦可依赖 mtime 自然失效）。"""
     global _mtime, _cached_enabled
     _mtime = None
     _cached_enabled = None
@@ -52,5 +61,6 @@ def load_enabled_ids() -> List[str]:
 
 
 def save_enabled_ids(ids: List[str]) -> None:
+    """覆盖写入启用列表并清空缓存。"""
     atomic_write_json(PLUGIN_CONFIG, {"enabled": ids})
     invalidate_plugin_settings_cache()

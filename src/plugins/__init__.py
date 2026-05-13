@@ -1,4 +1,8 @@
-"""消息插件：在 src/plugins/ 下注册内置插件，由 config/plugins.json 控制启用列表。"""
+"""
+消息插件子包：链式处理、注册表、配置与内置实现。
+
+对外给业务侧的稳定入口见 src.message_handler 中的 default_message_handler。
+"""
 
 from src.plugins.chain import composite_message_handler
 

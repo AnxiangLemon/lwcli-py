@@ -1,17 +1,22 @@
+"""
+LWAPI 运维台：aiohttp 应用定义与 REST / WebSocket 路由。
+
+提供账号 CRUD、启停机器人、按备注读当日日志尾、插件启用列表读写，
+以及按账号下标的 WS 通道用于推送扫码与登录状态（与 BotService 内 emit 对接）。
+"""
+
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
 from aiohttp import web, WSMsgType
 from loguru import logger
 
-from src.account_loader import load_accounts_safe, save_accounts
+from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
-from src.services.account_slot import account_slot_key
 from src.services.bot_service import BotService
 from src.utils import read_account_today_log_tail, setup_logger
 
@@ -19,6 +24,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 class AdminWebApp:
+    """组装 EventHub、BotService 与 aiohttp 路由的运维台应用对象。"""
+
     def __init__(self) -> None:
         self.account_events = AccountEventHub()
         self.bot_service = BotService(account_events=self.account_events)

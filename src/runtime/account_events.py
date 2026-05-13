@@ -1,6 +1,10 @@
 """
-按账号索引广播登录/扫码事件，供 WebSocket `/ws/account/{idx}` 订阅。
-与机器人启动流程绑定：有 emit 时 LoginService 走流式扫码，无 emit 时走终端打印（兼容非 Web 场景）。
+账号级事件总线：把登录/扫码等 JSON 消息广播到已连接的 WebSocket。
+
+每个账号在 accounts.json 中有固定下标 idx；BotService 在登录流程中 emit 到
+本 Hub，运维台页面连接 /ws/account/{idx} 即可实时展示二维码与状态。
+
+带短队列重放：避免用户「先点启动、后连 WS」时错过首条 qr_ready。
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ from aiohttp import web
 
 
 class AccountEventHub:
-    """同一账号可重放最近事件，避免「先启动后连 WS」错过 qr_ready。"""
+    """维护 subscribers 与每账号最近若干条事件的环形缓冲，用于重放。"""
 
     MAX_REPLAY = 48
 
@@ -23,10 +27,12 @@ class AccountEventHub:
         self._replay: Dict[int, List[str]] = {}
 
     async def clear_replay(self, account_idx: int) -> None:
+        """某账号重新启动登录前清空旧重放缓存，避免错乱。"""
         async with self._lock:
             self._replay.pop(account_idx, None)
 
     async def register(self, account_idx: int, ws: web.WebSocketResponse) -> None:
+        """新 WS 接入后立即发送该账号积压的重放消息。"""
         replay_snapshot: List[str] = []
         async with self._lock:
             self._subscribers.setdefault(account_idx, []).append(ws)
@@ -48,6 +54,7 @@ class AccountEventHub:
                 self._subscribers.pop(account_idx, None)
 
     async def emit(self, account_idx: int, msg: Dict[str, Any]) -> None:
+        """写入重放队列并推送给当前该 idx 下所有活跃连接。"""
         text = json.dumps(msg, ensure_ascii=False)
         async with self._lock:
             lst = self._replay.setdefault(account_idx, [])
@@ -67,4 +74,5 @@ class AccountEventHub:
             await self.unregister(account_idx, w)
 
     def subscriber_count(self, account_idx: int) -> int:
+        """可选：用于观测某账号当前 WS 连接数。"""
         return len(self._subscribers.get(account_idx, []))

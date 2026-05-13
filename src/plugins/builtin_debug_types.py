@@ -1,3 +1,9 @@
+"""
+内置插件：调试输出非文本消息的 msgType（文本 msgType==1 跳过）。
+
+启用后可在日志中看到图片/语音等类型摘要，便于对照协议字段。
+"""
+
 from __future__ import annotations
 
 from loguru import logger
