@@ -12,6 +12,13 @@ class HttpError(Exception):
         super().__init__(f"HTTP {status_code}: {message}")
 
 
+def is_wrapped_request_timeout(exc: BaseException) -> bool:
+    """transport 将 httpx 超时转为 HttpError(0, 'request timeout') 时的判断。"""
+    return isinstance(exc, HttpError) and exc.status_code == 0 and "timeout" in (
+        exc.message or ""
+    ).lower()
+
+
 class ApiError(Exception):
     """API 业务层错误（code != 200）"""
     def __init__(self, code: int, message: str):

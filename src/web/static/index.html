@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LWAPI 运维台</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>LWAPI 运维台</h1>
+      <p class="subtitle">
+        有问题可以联系作者 Telegram：<a href="https://t.me/Xnasl24" target="_blank" rel="noopener" style="color:var(--accent)">https://t.me/Xnasl24</a>
+      </p>
+    </header>
+
+    <nav class="top-nav" aria-label="主导航">
+      <button type="button" class="nav-link is-active" data-nav="accounts" onclick="showView('accounts')">账号列表</button>
+      <button type="button" class="nav-link" data-nav="logs" onclick="showView('logs')">日志</button>
+      <button type="button" class="nav-link" data-nav="plugins" onclick="showView('plugins')">插件管理</button>
+    </nav>
+
+    <section id="view-accounts" class="view-panel is-active" aria-labelledby="nav-accounts">
+      <div class="toolbar">
+        <button type="button" class="btn" id="btn-refresh" onclick="refreshAccounts({ soft: true })">刷新列表</button>
+        <button type="button" class="btn btn-primary" id="btn-start-all" onclick="startAll()">启动全部机器人</button>
+      </div>
+
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>新增账号</h2>
+        <form onsubmit="addAccount(event)" class="form-row">
+          <input type="text" id="new-device" placeholder="device_id（必填）" required />
+          <input type="text" id="new-remark" placeholder="备注（可选）" />
+          <button type="submit" class="btn btn-primary">添加</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>账号列表</h2>
+        <div id="accounts"></div>
+      </div>
+    </section>
+
+    <section id="view-logs" class="view-panel" aria-label="日志">
+      <div class="card">
+        <h2>按账号查看当日日志</h2>
+        <p class="subtitle" style="margin-top:0;margin-bottom:14px">
+          读取<strong>当天</strong>对应备注文件末尾 50 行
+        </p>
+        <div class="log-toolbar">
+          <select id="log-account-select" class="log-select" aria-label="选择账号"></select>
+          <button type="button" class="btn btn-primary" onclick="loadLogForSelected()">刷新日志</button>
+        </div>
+        <pre id="log-page-pre" class="log-page-pre">请选择账号后点击「刷新日志」。</pre>
+      </div>
+    </section>
+
+    <section id="view-plugins" class="view-panel" aria-label="插件管理">
+      <div class="card">
+        <div class="plugins-placeholder">
+          <h3>插件管理</h3>
+          <p>此分组预留给后续插件安装、启用与配置。当前版本仅占位。</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const accountWs = {};
+
+    function showView(name) {
+      document.querySelectorAll('.view-panel').forEach((p) => p.classList.remove('is-active'));
+      const panel = document.getElementById('view-' + name);
+      if (panel) panel.classList.add('is-active');
+      document.querySelectorAll('.nav-link').forEach((b) => b.classList.remove('is-active'));
+      const nav = document.querySelector('.nav-link[data-nav="' + name + '"]');
+      if (nav) nav.classList.add('is-active');
+      if (name === 'logs') populateLogAccountSelectFromCache();
+    }
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+      if (!res.ok) {
+        const err = (data && data.error) || text || res.status;
+        throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
+      }
+      return data;
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+
+    function protoWs() {
+      return location.protocol === 'https:' ? 'wss:' : 'ws:';
+    }
+
+    let _lastAccountsPayload = [];
+
+    function ensureAccountWs(index) {
+      if (accountWs[index] && accountWs[index].readyState === WebSocket.OPEN) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        try {
+          const ws = new WebSocket(protoWs() + '//' + location.host + '/ws/account/' + index);
+          accountWs[index] = ws;
+          ws.onopen = () => resolve();
+          ws.onerror = () => reject(new Error('事件通道连接失败'));
+          ws.onmessage = (ev) => {
+            try {
+              const msg = JSON.parse(ev.data);
+              onAccountEvent(index, msg);
+            } catch (e) { console.warn(e); }
+          };
+          ws.onclose = () => {
+            if (accountWs[index] === ws) delete accountWs[index];
+          };
+        } catch (e) { reject(e); }
+      });
+    }
+
+    function onAccountEvent(index, msg) {
+      const st = document.getElementById('status-' + index);
+      const panel = document.getElementById('qr-panel-' + index);
+      const ev = msg.event;
+      if (ev === 'sec_auto_ok') {
+        if (st) st.innerHTML = '<span class="ok">' + esc(msg.message || '缓存登录成功') + '</span>';
+        return;
+      }
+      if (ev === 'qr_ready') {
+        const b64 = (msg.qr_base64 || '').replace(/\s/g, '');
+        const scanUrl = esc(msg.qr_url || ('http://weixin.qq.com/x/' + msg.uuid));
+        if (panel) {
+          panel.innerHTML =
+            '<div class="acc-qr-placeholder">' +
+            '<span class="acc-uuid-label">UUID</span>' +
+            '<code class="acc-uuid">' + esc(msg.uuid) + '</code>' +
+            '<a class="acc-scan-link" href="' + scanUrl + '" target="_blank" rel="noopener">浏览器打开扫码</a>' +
+            '<div class="acc-qr-frame"><img class="qr" alt="微信登录二维码" src="data:image/png;base64,' + b64 + '" onerror="this.style.display=\'none\'" /></div>' +
+            '</div>';
+        }
+        if (st) st.innerHTML = '<span class="info">请使用微信扫描右侧二维码</span>';
+        return;
+      }
+      if (ev === 'poll') {
+        if (st) st.textContent = '等待手机确认…';
+        return;
+      }
+      if (ev === 'status') {
+        const map = { waiting: '等待扫码', scanned: '已扫码，请在手机上点登录', confirming: '确认中', canceled: '已取消', unknown: '状态更新' };
+        if (st) st.innerHTML = '<span class="info">' + (map[msg.phase] || msg.phase) + ' <small>(' + msg.raw_status + ')</small></span>';
+        return;
+      }
+      if (ev === 'verify_url') {
+        if (st) st.innerHTML = '<span class="err">安全验证：<a href="' + esc(msg.url) + '" target="_blank" rel="noopener">打开链接</a></span>';
+        return;
+      }
+      if (ev === 'warning') {
+        if (st) st.textContent = '网络波动：' + (msg.message || '');
+        return;
+      }
+      if (ev === 'success') {
+        if (st) st.innerHTML = '<span class="ok">登录成功 wxid=' + esc(msg.wxid) + '，正在写入配置…</span>';
+        return;
+      }
+      if (ev === 'login_saved') {
+        if (st) st.innerHTML = '<span class="ok">已保存 wxid：' + esc(msg.wxid) + '</span>';
+        refreshAccounts({ soft: true });
+        return;
+      }
+      if (ev === 'bot_online') {
+        if (st) st.innerHTML = '<span class="ok">' + esc(msg.message || '机器人已在线') + '</span>';
+        refreshAccounts({ soft: true });
+        return;
+      }
+      if (ev === 'bot_error') {
+        if (st) st.innerHTML = '<span class="err">' + esc(msg.message || '运行错误') + '</span>';
+        return;
+      }
+      if (ev === 'error') {
+        if (st) st.innerHTML = '<span class="err">' + esc(msg.message || msg.code || '错误') + '</span>';
+        refreshAccounts({ soft: true });
+      }
+    }
+
+    function badgeHtml(acc) {
+      if (acc.pending_login) return '<span class="badge badge-wait">登录中</span>';
+      if (acc.running) return '<span class="badge badge-on">运行中</span>';
+      return '<span class="badge badge-off">未运行</span>';
+    }
+
+    function updateStartAllButton(accounts) {
+      const btnAll = document.getElementById('btn-start-all');
+      if (!btnAll) return;
+      const allBusy = accounts.length > 0 && accounts.every((a) => a.running || a.pending_login);
+      btnAll.disabled = allBusy;
+    }
+
+    function softPatchAccounts(data) {
+      updateStartAllButton(data.accounts);
+      const cards = document.querySelectorAll('.account-card[data-idx]');
+      if (cards.length !== data.accounts.length) return false;
+
+      data.accounts.forEach((acc, index) => {
+        const card = document.querySelector('.account-card[data-idx="' + index + '"]');
+        if (!card) return;
+        const titleEl = card.querySelector('.acc-title');
+        const badgeSlot = card.querySelector('.acc-badges');
+        if (titleEl) titleEl.textContent = acc.remark || '(未备注)';
+        if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
+        const d = card.querySelector('.acc-device');
+        const w = card.querySelector('.acc-wxid');
+        if (d) d.textContent = acc.device_id;
+        if (w) w.textContent = acc.wxid || '—';
+
+        const running = acc.running;
+        const pending = acc.pending_login;
+        const disableStart = running || pending;
+        const disableMutate = running || pending;
+        const startBtn = card.querySelector('.acc-btn-start');
+        const stopBtn = card.querySelector('.acc-btn-stop');
+        const editBtn = card.querySelector('.acc-btn-edit');
+        const delBtn = card.querySelector('.acc-btn-del');
+        if (startBtn) startBtn.disabled = disableStart;
+        if (stopBtn) stopBtn.disabled = !running && !pending;
+        if (editBtn) editBtn.disabled = disableMutate;
+        if (delBtn) delBtn.disabled = disableMutate;
+      });
+      return true;
+    }
+
+    function buildAccountRow(acc, index) {
+      const running = acc.running;
+      const pending = acc.pending_login;
+      const disableStart = running || pending;
+      const disableMutate = running || pending;
+      const badge = badgeHtml(acc);
+
+      return (
+        '<div class="account-card" data-idx="' + index + '">' +
+        '<div class="acc-card-inner">' +
+        '<div class="acc-card-main">' +
+        '<div class="acc-card-head">' +
+        '<h3 class="acc-title">' + esc(acc.remark || '(未备注)') + '</h3>' +
+        '<div class="acc-badges">' + badge + '</div></div>' +
+        '<dl class="acc-meta-list">' +
+        '<div class="acc-meta-row"><dt>device</dt><dd class="acc-device">' + esc(acc.device_id) + '</dd></div>' +
+        '<div class="acc-meta-row"><dt>wxid</dt><dd class="acc-wxid">' + esc(acc.wxid || '—') + '</dd></div>' +
+        '</dl>' +
+        '<div class="actions acc-actions">' +
+        '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
+        (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>' +
+        '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
+        (!running && !pending ? ' disabled' : '') + '>停止</button>' +
+        '<button type="button" class="btn btn-ghost acc-btn-edit" data-edit="' + index + '" onclick="editAccount(' + index + ')"' +
+        (disableMutate ? ' disabled' : '') + '>编辑</button>' +
+        '<button type="button" class="btn btn-danger acc-btn-del" data-del="' + index + '" onclick="deleteAccount(' + index + ')"' +
+        (disableMutate ? ' disabled' : '') + '>删除</button>' +
+        '</div></div>' +
+        '<aside class="acc-card-side">' +
+        '<div class="acc-qr-shell">' +
+        '<p class="acc-qr-hint" id="qr-hint-' + index + '">启动后，二维码与登录状态将显示在此</p>' +
+        '<div class="acc-qr-panel" id="qr-panel-' + index + '"></div>' +
+        '<div class="status-line acc-status" id="status-' + index + '"></div>' +
+        '</div></aside></div></div>'
+      );
+    }
+
+    async function refreshAccounts(opts) {
+      opts = opts || {};
+      const soft = opts.soft === true;
+      const btn = document.getElementById('btn-refresh');
+      if (btn) btn.disabled = true;
+      try {
+        const data = await fetchJson('/api/accounts');
+        _lastAccountsPayload = data.accounts;
+        const host = document.getElementById('accounts');
+        if (soft && host.querySelector('.account-card')) {
+          if (softPatchAccounts(data)) {
+            populateLogAccountSelect(data.accounts);
+            return;
+          }
+        }
+        updateStartAllButton(data.accounts);
+        host.innerHTML = data.accounts.map((acc, index) => buildAccountRow(acc, index)).join('');
+        populateLogAccountSelect(data.accounts);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function populateLogAccountSelect(accounts) {
+      const sel = document.getElementById('log-account-select');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = accounts
+        .map((a, i) => {
+          const label = (a.remark || '').trim() || (a.device_id || '').slice(0, 12) || '账号' + i;
+          return '<option value="' + i + '">' + esc(label) + '</option>';
+        })
+        .join('');
+      if (prev !== '' && sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
+    }
+
+    function populateLogAccountSelectFromCache() {
+      if (_lastAccountsPayload && _lastAccountsPayload.length) populateLogAccountSelect(_lastAccountsPayload);
+    }
+
+    async function loadLogForSelected() {
+      const sel = document.getElementById('log-account-select');
+      const pre = document.getElementById('log-page-pre');
+      if (!sel || !pre) return;
+      const idx = sel.value;
+      if (idx === '' || idx == null) {
+        pre.textContent = '暂无账号。';
+        return;
+      }
+      pre.textContent = '加载中…';
+      try {
+        const data = await fetchJson('/api/accounts/' + idx + '/log?lines=50');
+        if (!data.exists) {
+          pre.textContent = (data.message || '无日志文件') + '\n' + (data.path || '');
+          return;
+        }
+        pre.textContent = (data.lines || []).join('\n');
+      } catch (e) {
+        pre.textContent = e.message;
+      }
+    }
+
+    async function startBot(index) {
+      const st = document.getElementById('status-' + index);
+      if (st) st.innerHTML = '<span class="info">正在连接事件通道并启动…</span>';
+      try {
+        await ensureAccountWs(index);
+        await new Promise((r) => setTimeout(r, 80));
+        await fetchJson('/api/accounts/' + index + '/start', { method: 'POST' });
+        await refreshAccounts({ soft: true });
+      } catch (e) {
+        alert(e.message);
+        if (st) st.innerHTML = '<span class="err">' + esc(e.message) + '</span>';
+        await refreshAccounts({ soft: false });
+      }
+    }
+
+    /** 停止后清空右侧扫码区（二维码、UUID、链接、状态），恢复占位提示。 */
+    function clearAccountQrUi(index) {
+      const panel = document.getElementById('qr-panel-' + index);
+      const st = document.getElementById('status-' + index);
+      if (panel) panel.innerHTML = '';
+      if (st) st.innerHTML = '';
+    }
+
+    async function stopBot(index) {
+      try {
+        await fetchJson('/api/accounts/' + index + '/stop', { method: 'POST' });
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+      const ws = accountWs[index];
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+        delete accountWs[index];
+      }
+      clearAccountQrUi(index);
+      await refreshAccounts({ soft: true });
+    }
+
+    async function startAll() {
+      try {
+        const data = await fetchJson('/api/accounts');
+        for (let i = 0; i < data.accounts.length; i++) {
+          await ensureAccountWs(i);
+        }
+        await new Promise((r) => setTimeout(r, 150));
+        await fetchJson('/api/start-all', { method: 'POST' });
+        await refreshAccounts({ soft: true });
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function addAccount(e) {
+      e.preventDefault();
+      const device_id = document.getElementById('new-device').value.trim();
+      const remark = document.getElementById('new-remark').value.trim();
+      if (!device_id) return;
+      await fetchJson('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id, remark }),
+      });
+      document.getElementById('new-device').value = '';
+      document.getElementById('new-remark').value = '';
+      await refreshAccounts({ soft: false });
+    }
+
+    async function editAccount(index) {
+      const data = await fetchJson('/api/accounts');
+      const acc = data.accounts[index];
+      if (!acc) return;
+      const device_id = prompt('device_id', acc.device_id);
+      if (device_id == null) return;
+      const remark = prompt('备注', acc.remark || '');
+      if (remark == null) return;
+      const wxid = prompt('wxid（可空）', acc.wxid || '');
+      if (wxid == null) return;
+      await fetchJson('/api/accounts/' + index, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: device_id.trim(),
+          remark: remark.trim(),
+          wxid: wxid.trim(),
+        }),
+      });
+      await refreshAccounts({ soft: false });
+    }
+
+    async function deleteAccount(index) {
+      if (!confirm('确定删除该账号？（需已停止）')) return;
+      try {
+        await fetchJson('/api/accounts/' + index, { method: 'DELETE' });
+        const ws = accountWs[index];
+        if (ws) {
+          try { ws.close(); } catch (e) {}
+          delete accountWs[index];
+        }
+        await refreshAccounts({ soft: false });
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    refreshAccounts({ soft: false });
+    setInterval(function () { refreshAccounts({ soft: true }); }, 4000);
+  </script>
+</body>
+</html>

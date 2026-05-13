@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+
+from aiohttp import web, WSMsgType
+from loguru import logger
+
+from src.account_loader import load_accounts_safe, save_accounts
+from src.runtime.account_events import AccountEventHub
+from src.services.account_slot import account_slot_key
+from src.services.bot_service import BotService
+from src.utils import read_account_today_log_tail, setup_logger
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+class AdminWebApp:
+    def __init__(self) -> None:
+        self.account_events = AccountEventHub()
+        self.bot_service = BotService(account_events=self.account_events)
+        setup_logger("web")
+
+    def build(self) -> web.Application:
+        app = web.Application()
+        app.add_routes(
+            [
+                web.static("/static", str(STATIC_DIR)),
+                web.get("/", self.index),
+                web.get("/api/accounts", self.api_accounts),
+                web.post("/api/accounts", self.api_account_create),
+                web.put("/api/accounts/{idx}", self.api_account_update),
+                web.delete("/api/accounts/{idx}", self.api_account_delete),
+                web.get("/api/accounts/{idx}/log", self.api_account_log),
+                web.get("/ws/account/{idx}", self.ws_account),
+                web.post("/api/accounts/{idx}/start", self.api_start_one),
+                web.post("/api/accounts/{idx}/stop", self.api_stop_one),
+                web.post("/api/start-all", self.api_start_all),
+            ]
+        )
+        return app
+
+    async def index(self, request: web.Request) -> web.Response:
+        return web.FileResponse(STATIC_DIR / "index.html")
+
+    def _is_running(self, acc: dict) -> bool:
+        return account_slot_key(acc) in set(self.bot_service.running_slot_keys())
+
+    async def api_accounts(self, request: web.Request) -> web.Response:
+        accounts = load_accounts_safe()
+        running = set(self.bot_service.running_slot_keys())
+        pending = self.bot_service.login_pending_indices
+        output = []
+        for i, acc in enumerate(accounts):
+            output.append(
+                {
+                    **acc,
+                    "running": account_slot_key(acc) in running,
+                    "pending_login": i in pending,
+                }
+            )
+        return web.json_response({"accounts": output})
+
+    async def api_account_log(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        try:
+            n = int(request.rel_url.query.get("lines", "50"))
+        except ValueError:
+            n = 50
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        acc = accounts[idx]
+        remark = (acc.get("remark") or "").strip() or (acc.get("device_id") or "")[:8]
+        payload = read_account_today_log_tail(remark, lines=n)
+        return web.json_response(payload)
+
+    async def api_account_create(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        device_id = (body.get("device_id") or "").strip()
+        if not device_id:
+            return web.json_response({"error": "device_id 必填"}, status=400)
+        remark = (body.get("remark") or "").strip() or device_id[:8]
+        acc = {
+            "device_id": device_id,
+            "wxid": (body.get("wxid") or "").strip(),
+            "remark": remark,
+            "proxy": body.get("proxy"),
+        }
+        accounts = load_accounts_safe()
+        accounts.append(acc)
+        save_accounts(accounts)
+        return web.json_response({"ok": True, "index": len(accounts) - 1})
+
+    async def api_account_update(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        if self._is_running(accounts[idx]):
+            return web.json_response(
+                {"error": "该账号机器人运行中，请先停止后再编辑"}, status=409
+            )
+        if idx in self.bot_service.login_pending_indices:
+            return web.json_response(
+                {"error": "该账号正在登录中，请稍后再编辑"}, status=409
+            )
+        if "device_id" in body:
+            accounts[idx]["device_id"] = str(body["device_id"]).strip()
+        if "wxid" in body:
+            accounts[idx]["wxid"] = str(body.get("wxid") or "").strip()
+        if "remark" in body:
+            accounts[idx]["remark"] = str(body.get("remark") or "").strip()
+        if "proxy" in body:
+            accounts[idx]["proxy"] = body.get("proxy")
+        save_accounts(accounts)
+        return web.json_response({"ok": True})
+
+    async def api_account_delete(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        if self._is_running(accounts[idx]):
+            return web.json_response(
+                {"error": "该账号机器人运行中，请先停止后再删除"}, status=409
+            )
+        if idx in self.bot_service.login_pending_indices:
+            return web.json_response(
+                {"error": "该账号正在登录中，请稍后再删除"}, status=409
+            )
+        accounts.pop(idx)
+        save_accounts(accounts)
+        return web.json_response({"ok": True})
+
+    async def ws_account(self, request: web.Request) -> web.WebSocketResponse:
+        idx = int(request.match_info["idx"])
+        ws = web.WebSocketResponse(heartbeat=30)
+        await ws.prepare(request)
+        await self.account_events.register(idx, ws)
+        try:
+            while True:
+                msg = await ws.receive()
+                if msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR, WSMsgType.CLOSED):
+                    break
+        finally:
+            await self.account_events.unregister(idx, ws)
+        return ws
+
+    async def api_start_one(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        account = accounts[idx]
+        await self.bot_service.start_one(account, accounts, idx)
+        return web.json_response({"ok": True})
+
+    async def api_stop_one(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        stopped = await self.bot_service.stop_for_account(accounts[idx])
+        return web.json_response({"ok": True, "stopped": stopped})
+
+    async def api_start_all(self, request: web.Request) -> web.Response:
+        accounts = load_accounts_safe()
+        await self.bot_service.start_all(accounts)
+        return web.json_response({"ok": True, "count": len(accounts)})
+
+
+def create_app() -> web.Application:
+    return AdminWebApp().build()

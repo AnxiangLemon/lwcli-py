@@ -5,7 +5,8 @@ from datetime import datetime
 # 这就是以前写插件的地方 所有收到的消息都在这里处理
 
 async def default_message_handler(client, resp: SyncMessageResponse):
-    wxid = getattr(client.transport._config, "x_wxid", "")
+    # 通过 SDK 公共属性获取会话信息，避免依赖私有字段。
+    wxid = client.wxid
     for msg in resp.addMsgs:
         print(f"这是原生的消息 { msg.msgType} 自行处理 {msg}")
         

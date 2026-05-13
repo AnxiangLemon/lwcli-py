@@ -1,0 +1,4579 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Windows `WeiXin4.0` 协议",
+        "title": "LwApi",
+        "contact": {
+            "name": "Xnasl24",
+            "email": "anxianglemon@gmail.com"
+        },
+        "version": "1.0.2"
+    },
+    "basePath": "/api",
+    "paths": {
+        "/Favor/Del": {
+            "post": {
+                "description": "删除指定的微信收藏项",
+                "tags": [
+                    "Favor"
+                ],
+                "summary": "删除收藏",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "删除参数：FavId为收藏项ID（从同步收藏接口获取）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/favor.DelParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Favor/GetFavInfo": {
+            "post": {
+                "description": "获取用户的微信收藏信息，包括收藏列表或元数据",
+                "tags": [
+                    "Favor"
+                ],
+                "summary": "获取收藏信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回收藏信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Favor/GetFavItem": {
+            "post": {
+                "description": "读取指定收藏项的详细内容",
+                "tags": [
+                    "Favor"
+                ],
+                "summary": "读取收藏内容",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "收藏项参数：FavId为收藏项ID（从同步收藏接口获取）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/favor.GetFavItemParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回收藏项的详细内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Favor/Sync": {
+            "post": {
+                "description": "同步用户的微信收藏数据，返回收藏项列表和同步密钥",
+                "tags": [
+                    "Favor"
+                ],
+                "summary": "同步收藏",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "同步参数：KeyBuf为上次同步返回的密钥（首次同步可留空）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/favor.SyncParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回同步的收藏数据，包括返回码、收藏项列表和同步密钥",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Finder/UserPrepare": {
+            "post": {
+                "description": "这里填写接口的描述",
+                "tags": [
+                    "Finder"
+                ],
+                "summary": "用户中心",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "请输登录后的wxid",
+                        "name": "wxid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/Friend/Blacklist": {
+            "post": {
+                "description": "将指定用户添加或移除微信黑名单",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "添加或移除黑名单",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "黑名单参数：ToWxid为目标用户微信ID，Val为操作值（15添加，7移除）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.BlacklistParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/Delete": {
+            "post": {
+                "description": "删除指定的微信好友",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "删除好友",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "删除参数：ToWxid为要删除的好友微信ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.DeleteParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/GetContactDetail": {
+            "post": {
+                "description": "获取指定微信联系人（最多20个）的详细信息，群聊留空",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "获取通讯录好友详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "详情参数：UserNameList为目标用户微信ID列表（逗号分隔，最多20个）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.GetContactDetailparameter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回联系人详细信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/GetContactList": {
+            "post": {
+                "description": "获取微信通讯录中的好友和群聊列表",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "获取通讯录好友列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "列表参数：CurrentWxcontactSeq和CurrentChatRoomContactSeq为序列号（首次请求填0）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.GetContactListparameter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回通讯录好友列表",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/PassVerify": {
+            "post": {
+                "description": "通过收到的微信好友请求",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "同意好友验证",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "验证参数：V1和V2为申请者的标识，Scene为来源场景（从请求消息的XML获取）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.PassVerifyParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回验证结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/Search": {
+            "post": {
+                "description": "搜索微信联系人，支持通过微信ID或用户名查找",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "搜索联系人",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "搜索参数：ToUserName为目标用户微信ID或用户名，FromScene为来源场景（默认0），SearchScene为搜索场景（默认1，爆粉情况下需特殊通道）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.SearchParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回搜索结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/SendRequest": {
+            "post": {
+                "description": "向指定用户发送微信好友请求",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "发送好友请求",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "请求参数：V1和V2为目标用户的标识（必填），Scene为来源场景，VerifyContent为验证消息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.SendRequestParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Friend/SetRemarks": {
+            "post": {
+                "description": "为指定微信好友设置备注名称",
+                "tags": [
+                    "Friend"
+                ],
+                "summary": "设置好友备注",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "备注参数：ToWxid为目标好友微信ID，Remarks为备注名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/friend.SetRemarksParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设置结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/AddChatRoomMember": {
+            "post": {
+                "description": "向微信群聊添加成员（适用于40人以内群聊）",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "添加群成员",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "添加参数：ToWxids为目标用户微信ID列表（逗号分隔），ChatRoomName为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.AddChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回添加结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/ConsentToJoin": {
+            "post": {
+                "description": "通过群聊邀请链接同意加入微信群聊",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "同意加入群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "加入参数：Url为群聊邀请链接（从消息XML获取）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.ConsentToJoinParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回加入结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/CreateChatRoom": {
+            "post": {
+                "description": "创建新的微信群聊，需指定初始成员",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "创建群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "创建参数：ToWxids为初始群成员微信ID列表（逗号分隔，至少三个）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.CreateChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回创建结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/DelChatRoomMember": {
+            "post": {
+                "description": "从微信群聊中删除指定成员",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "删除群成员",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "删除参数：ToWxids为目标用户微信ID列表（逗号分隔），ChatRoomName为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.AddChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回删除结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/FacingCreateChatRoom": {
+            "post": {
+                "description": "通过密码和地理位置面对面创建微信群聊",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "面对面创建群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "创建参数：Password为群聊密码，OpCode为操作码，Latitude为纬度，Longitude为经度",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.FacingCreateChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/GetChatRoomInfo": {
+            "post": {
+                "description": "获取指定微信群聊的基本信息（不含公告）",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "获取群聊信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Gid为群聊ID（多个ID用逗号分隔）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.GetChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回群聊基本信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/GetChatRoomInfoDetail": {
+            "post": {
+                "description": "获取指定微信群聊的详细信息（包含公告）",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "获取群聊详细信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Gid为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.GetChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回群聊详细信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/GetChatRoomMemberDetail": {
+            "post": {
+                "description": "获取指定微信群聊的成员详细信息",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "获取群成员详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Gid为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.GetChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回群成员详细信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/GetQRCode": {
+            "post": {
+                "description": "获取指定微信群聊的二维码",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "获取群聊二维码",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Gid为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.GetChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回群聊二维码数据",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/InviteChatRoomMember": {
+            "post": {
+                "description": "邀请成员加入微信群聊（适用于40人以上群聊）",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "邀请群成员",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "邀请参数：ToWxids为目标用户微信ID列表（逗号分隔），ChatRoomName为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.AddChatRoomParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回邀请结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/MoveContactList": {
+            "post": {
+                "description": "将指定微信群聊保存到通讯录或从中移除",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "保存或移除通讯录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "操作参数：Gid为群聊ID，Val为操作值（3添加，2移除）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.MoveContactListParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回操作结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/OperateChatRoomAdmin": {
+            "post": {
+                "description": "执行群聊管理操作，包括添加、删除或转让管理员",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "群管理操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "管理参数：Gid为群聊ID，ToWxids为目标用户微信ID列表（逗号分隔，仅用于添加/删除），Val为操作值（1添加，2删除，3转让）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.OperateChatRoomAdminParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回管理结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/Quit": {
+            "post": {
+                "description": "退出指定的微信群聊",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "退出群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "退出参数：Gid为群聊ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.QuitGroupParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回退出结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/ScanIntoGroup": {
+            "post": {
+                "description": "通过群聊二维码链接加入微信群聊",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "扫码加入群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "加入参数：Url为群聊二维码链接",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.ScanIntoGroupParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回加入结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/ScanIntoGroupEnterprise": {
+            "post": {
+                "description": "通过二维码链接加入微信企业群聊",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "扫码加入企业群聊",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "加入参数：Url为企业群聊二维码链接",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.ScanIntoGroupParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回加入结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/SetChatRoomAnnouncement": {
+            "post": {
+                "description": "为指定微信群聊设置公告内容",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "设置群公告",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "公告参数：Gid为群聊ID，Content为公告内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.OperateChatRoomInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设置结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/SetChatRoomName": {
+            "post": {
+                "description": "为指定微信群聊设置名称",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "设置群聊名称",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "名称参数：Gid为群聊ID，Content为群聊名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.OperateChatRoomInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设置结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Group/SetChatRoomRemarks": {
+            "post": {
+                "description": "为指定微信群聊设置备注（仅自己可见）",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "设置群聊备注",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "备注参数：Gid为群聊ID，Content为备注内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/group.OperateChatRoomInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设置结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Label/Add": {
+            "post": {
+                "description": "创建新的微信标签",
+                "tags": [
+                    "Label"
+                ],
+                "summary": "添加标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "添加参数：LabelName为标签名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/label.AddParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回添加结果，Data包含新标签信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Label/Delete": {
+            "post": {
+                "description": "删除指定的微信标签",
+                "tags": [
+                    "Label"
+                ],
+                "summary": "删除标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "删除参数：LabelID为标签ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/label.DeleteParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回删除结果，Data包含操作状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Label/GetList": {
+            "post": {
+                "description": "获取用户的微信标签列表",
+                "tags": [
+                    "Label"
+                ],
+                "summary": "获取标签列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回标签列表，Data包含标签信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Label/UpdateList": {
+            "post": {
+                "description": "更新微信标签的成员列表",
+                "tags": [
+                    "Label"
+                ],
+                "summary": "更新标签成员",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "更新参数：LabelID为标签ID，ToWxids为目标用户微信ID列表（逗号分隔）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/label.UpdateListParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回更新结果，Data包含操作状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Label/UpdateName": {
+            "post": {
+                "description": "修改指定微信标签的名称",
+                "tags": [
+                    "Label"
+                ],
+                "summary": "修改标签名称",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "修改参数：LabelID为标签ID，NewName为新标签名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/label.UpdateNameParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回修改结果，Data包含操作状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/Awaken": {
+            "post": {
+                "description": "唤醒已存在的登录会话",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "唤醒登录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回唤醒结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/HeartBeat": {
+            "post": {
+                "description": "发送心跳包以保持登录会话活跃",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "发送心跳包",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回心跳包响应",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/LogOut": {
+            "post": {
+                "description": "退出当前微信登录会话",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "退出登录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回退出结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/LongLinkCreate": {
+            "post": {
+                "description": "发送长连接心跳包以维持长时间会话",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "创建长链接",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回长心跳包响应",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/LongQuery": {
+            "post": {
+                "description": "查询当前长连接的状态",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "查询长连接状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回长连接状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/LongRemove": {
+            "post": {
+                "description": "断开当前的长连接会话",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "断开长连接",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回断开结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/QRCheck": {
+            "post": {
+                "description": "检查二维码的扫描状态，确认是否登录成功",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "检测二维码状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "二维码的UUID，来自获取二维码接口的返回",
+                        "name": "uuid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回二维码扫描状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/QRGet": {
+            "post": {
+                "description": "获取微信登录所需的二维码，可选择是否使用代理",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "获取登录二维码",
+                "parameters": [
+                    {
+                        "description": "二维码请求参数：Proxy为代理地址（不使用代理时留空）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/login.GetQRReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回二维码数据",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/Reportclientcheck": {
+            "post": {
+                "description": "定时上报客户端环境（一天一次）",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "Reportclientcheck",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回客户端上报",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Login/SecAutoAuth": {
+            "post": {
+                "description": "使用已登录的微信ID进行二次自动登录",
+                "tags": [
+                    "Login"
+                ],
+                "summary": "二次登录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回二次登录结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/Comment": {
+            "post": {
+                "description": "对朋友圈内容进行点赞或评论",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "朋友圈点赞或评论",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "操作参数：Id为朋友圈内容ID，Type为操作类型（1点赞，2文本评论，3消息评论，4with，5陌生人点赞），Content为评论内容（Type为2或3时有效），ReplyCommnetId为回复的评论ID（Type为2或3时有效）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.CommentParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回点赞或评论结果，Data包含操作状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/GetDetail": {
+            "post": {
+                "description": "获取指定用户的微信朋友圈动态",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "获取特定人朋友圈",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Towxid为目标用户微信ID，Maxid为最大朋友圈ID（首次请求填0），Fristpagemd5为首页MD5值（首次请求留空）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.GetDetailparameter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回特定用户的朋友圈列表，Data包含动态列表",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/GetIdDetail": {
+            "post": {
+                "description": "获取指定朋友圈内容的详细信息",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "获取朋友圈内容详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Towxid为发布者微信ID，Id为朋友圈内容ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.GetIdDetailParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回朋友圈内容详情，Data包含内容信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/GetList": {
+            "post": {
+                "description": "获取微信朋友圈首页的动态列表",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "获取朋友圈首页列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "列表参数：Maxid为最大朋友圈ID（首次请求填0），Fristpagemd5为首页MD5值（首次请求留空）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.GetListParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回朋友圈列表，Data包含动态列表和分页信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/MmSnsPost": {
+            "post": {
+                "description": "发布新的微信朋友圈内容",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "发布朋友圈",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "发布参数：Content为朋友圈内容（需自行构造XML），BlackList为黑名单用户列表（逗号分隔），WithUserList为指定可见用户列表（逗号分隔）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.Messagearameter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发布结果，Data包含新朋友圈ID",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/MmSnsSync": {
+            "post": {
+                "description": "同步用户的微信朋友圈数据",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "朋友圈同步",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "同步参数：Synckey为同步密钥（首次同步可留空）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.MmSnsSyncParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回同步结果，Data包含朋友圈数据和新的同步密钥",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/Operation": {
+            "post": {
+                "description": "对朋友圈内容执行操作（如删除、设置隐私等）",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "朋友圈操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "操作参数：Id为朋友圈内容ID，Type为操作类型（1删除朋友圈，2设为隐私，3设为公开，4删除评论，5取消点赞），CommnetId为评论ID（Type为4时有效）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.OperationParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回操作结果，Data包含操作状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/PrivacySettings": {
+            "post": {
+                "description": "设置微信朋友圈的权限",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "朋友圈权限设置",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "设置参数：Function为功能代码（具体值需联系客服获取），Value为设置值",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.PrivacySettingsParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设置结果，Data包含权限状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/MmSns/Upload": {
+            "post": {
+                "description": "上传图片或视频到微信朋友圈",
+                "tags": [
+                    "MmSns"
+                ],
+                "summary": "朋友圈上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "上传参数：Base64为图片或视频的Base64编码数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sns.SnsUploadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回上传结果，Data包含上传文件信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/Revoke": {
+            "post": {
+                "description": "撤回已发送的消息，需提供消息ID",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "撤回消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "撤回参数：MsgId为要撤回的消息ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.RevokeMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回撤回结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendApp": {
+            "post": {
+                "description": "发送小程序消息，需提供小程序的XML数据和类型",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送小程序消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "小程序消息参数：ToWxid为接收者微信ID，Xml为小程序XML数据，Type为消息类型（根据场景设置）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendAppMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendCDNFile": {
+            "post": {
+                "description": "转发CDN文件消息，需提供文件的XML数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送CDN文件消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "CDN文件参数：ToWxid为接收者微信ID，Content为文件消息的XML数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendCDNImg": {
+            "post": {
+                "description": "转发CDN图片消息，需提供图片的XML数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送CDN图片消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "CDN图片参数：ToWxid为接收者微信ID，Content为图片消息的XML数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendCDNVideo": {
+            "post": {
+                "description": "转发CDN视频消息，需提供视频的XML数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送CDN视频消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "CDN视频参数：ToWxid为接收者微信ID，Content为视频消息的XML数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendEmoji": {
+            "post": {
+                "description": "发送表情消息，需提供表情数据和MD5校验值",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送表情消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "表情消息参数：ToWxid为接收者微信ID，TotalLen为表情数据长度，Md5为表情数据的MD5校验值",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendEmojiParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendQuote": {
+            "post": {
+                "description": "发送引用文本消息，支持引用其他用户的消息内容",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送引用文本消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "引用消息参数：Fromusr为被引用人的微信ID，Displayname为被引用人名称，NewMsgId为引用人消息的ID，MsgContent为新消息内容，QuoteContent为引用内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendQuoteMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendTxt": {
+            "post": {
+                "description": "发送文本消息，支持单聊或群聊，可@群成员",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送文本消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "文本消息参数：ToWxid为接收者微信ID（单聊）或群ID（群聊），Content为消息内容，At为群聊@的微信ID列表（逗号分隔）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendNewMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendVideo": {
+            "post": {
+                "description": "发送视频消息，需提供视频和封面的Base64编码数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送视频消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "视频消息参数：ToWxid为接收者微信ID，PlayLength为视频时长（秒），Base64为视频的Base64编码数据，ImageBase64为封面的Base64编码数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendVideoMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/SendVoice": {
+            "post": {
+                "description": "发送语音消息，需指定语音格式和时长",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送语音消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "语音消息参数：ToWxid为接收者微信ID，Base64为语音的Base64编码数据，Type为语音格式（AMR=0, MP3=2, SILK=4, SPEEX=1, WAVE=3），VoiceTime为语音时长（毫秒，1000为一秒）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendVoiceMessageParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/ShareCard": {
+            "post": {
+                "description": "分享微信名片，需提供名片相关信息",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "分享名片",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "名片参数：ToWxid为接收者微信ID，CardWxId为名片微信ID，CardNickName为名片昵称，CardAlias为名片别名",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.ShareCardParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/ShareLink": {
+            "post": {
+                "description": "发送包含标题、描述、URL和缩略图的分享链接消息",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送分享链接消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "分享链接参数：ToWxid为接收者微信ID，Title为链接标题，Desc为链接描述，Url为跳转地址，ThumbUrl为缩略图URL",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendShareLinkMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/ShareLocation": {
+            "post": {
+                "description": "分享地理位置信息，需提供经纬度和位置描述",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "分享位置",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "位置参数：ToWxid为接收者微信ID，X为经度，Y为纬度，Scale为地图缩放比例，Label为位置标签，Poiname为位置名称，Infourl为附加信息URL",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.ShareLocationParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/ShareVideo": {
+            "post": {
+                "description": "分享视频消息，需提供视频的XML数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "分享视频消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "视频分享参数：ToWxid为接收者微信ID，Xml为视频消息的XML数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.ShareVideoMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/Sync": {
+            "post": {
+                "description": "同步用户的微信消息，获取最新消息记录",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "同步消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回同步的消息记录",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Msg/UploadImg": {
+            "post": {
+                "description": "发送图片消息，需提供Base64编码的图片数据",
+                "tags": [
+                    "Msg"
+                ],
+                "summary": "发送图片消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "图片消息参数：ToWxid为接收者微信ID，Base64为图片的Base64编码数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/msg.SendImageMsgParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回发送结果",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/BizProfileV2": {
+            "post": {
+                "description": "获取指定公众号历史文章列表",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "获取公众号文章列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Wxid、公众号biz用户名、分页参数等",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.BizProfileV2Param"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/Follow": {
+            "post": {
+                "description": "用户发起关注公众号操作",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "关注公众号",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "关注参数：Appid为公众号AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/GetAppMsgExt": {
+            "post": {
+                "description": "模拟用户行为读取文章详情并触发阅读",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "阅读文章",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为文章地址",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.ReadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/GetAppMsgExtLike": {
+            "post": {
+                "description": "点赞指定的公众号文章",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "点赞文章",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为文章地址",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.ReadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/GetCommentData": {
+            "post": {
+                "description": "获取公众号文章的评论内容或评论数",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "获取文章评论数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为文章地址",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.ReadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/GetReadData": {
+            "post": {
+                "description": "获取指定公众号文章的阅读数等统计信息",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "获取文章阅读数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为文章地址",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.ReadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/JSAPIPreVerify": {
+            "post": {
+                "description": "获取公众号网页JSAPI签名",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "JSAPI预验证",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为网页地址，Appid为公众号AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.GetkeyParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/MpGetA8Key": {
+            "post": {
+                "description": "用于获取文章阅读权限所需的key和uin信息",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "获取文章Key和Uin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为文章地址",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.ReadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/OauthAuthorize": {
+            "post": {
+                "description": "获取公众号网页OAuth授权信息",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "OAuth授权",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "参数：Url为授权页面链接，Appid为公众号AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.GetkeyParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Official/Quit": {
+            "post": {
+                "description": "用户发起取消关注操作",
+                "tags": [
+                    "Official"
+                ],
+                "summary": "取消关注公众号",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "取消关注参数：Appid为公众号AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/official.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/CdnDownloadImage": {
+            "post": {
+                "description": "通过CDN下载微信高清图片",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "CDN下载高清图片",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "下载参数：FileNo为文件编号，FileAesKey为文件AES密钥",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.CdnDownloadImageParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回图片数据，Data包含Base64编码的图片内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/DownloadFile": {
+            "post": {
+                "description": "下载微信消息中的文件附件",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "下载文件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "下载参数：AppID为应用ID，AttachId为附件ID，UserName为发送者微信ID，DataLen为文件大小（从XML获取），Section为数据段信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.DownloadAppAttachParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回文件数据，Data包含Base64编码的文件内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/DownloadImg": {
+            "post": {
+                "description": "下载微信消息中的高清图片",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "下载高清图片",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "下载参数：ToWxid为目标用户微信ID，MsgId为消息ID，DataLen为图片大小（从XML获取），Section为数据段信息，CompressType为压缩类型",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.DownloadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回图片数据，Data包含Base64编码的图片内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/DownloadVideo": {
+            "post": {
+                "description": "下载微信消息中的视频",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "下载视频",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "下载参数：ToWxid为目标用户微信ID，MsgId为消息ID，DataLen为视频大小（从XML获取），Section为数据段信息，CompressType为压缩类型",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.DownloadParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回视频数据，Data包含Base64编码的视频内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/DownloadVoice": {
+            "post": {
+                "description": "下载微信消息中的语音",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "下载语音",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "下载参数：FromUserName为发送者微信ID，MsgId为消息ID，Bufid为语音缓冲区ID，Length为语音数据长度",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.DownloadVoiceParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回语音数据，Data包含Base64编码的语音内容",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/GetA8Key": {
+            "post": {
+                "description": "获取微信的A8Key，用于特定场景的认证",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "获取A8Key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "请求参数：OpCode默认为2，Scene默认为4，CodeType默认为19，CodeVersion默认为5，ReqUrl为请求URL，CookieBase64为Cookie数据，NetType为网络类型，Flag为标志位",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.GetA8KeyParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回A8Key数据，Data包含A8Key信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/GetBoundHardDevices": {
+            "post": {
+                "description": "获取用户绑定的微信硬件设备列表",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "获取绑定硬件设备",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回设备列表，Data包含硬件设备信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/GetCdnDns": {
+            "post": {
+                "description": "获取微信CDN服务器的DNS信息",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "获取CDN服务器DNS信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回CDN DNS信息，Data包含DNS数据",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/Other/ThirdAppGrant": {
+            "post": {
+                "description": "授权第三方应用访问微信",
+                "tags": [
+                    "Other"
+                ],
+                "summary": "第三方应用授权",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "授权参数：Appid为第三方应用ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/misc.ThirdAppGrantParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回授权结果，Data包含授权状态",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/GetContactProfile": {
+            "post": {
+                "description": "获取用户的微信个人信息",
+                "tags": [
+                    "User"
+                ],
+                "summary": "获取个人信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回个人信息，Data包含用户资料",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/GetQRCode": {
+            "post": {
+                "description": "获取用户的微信个人二维码",
+                "tags": [
+                    "User"
+                ],
+                "summary": "获取个人二维码",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Style为二维码样式（8为默认样式）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.GetQRCodeParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回二维码数据，Data包含二维码信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/GetUserAuthList": {
+            "post": {
+                "description": "获取用户已授权的应用列表",
+                "tags": [
+                    "User"
+                ],
+                "summary": "获取已授权应用列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：KeyWord为搜索关键字，NextPageData为分页数据（0获取817以前授权，1获取817以后授权）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.GetUserAuthListParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回已授权应用列表，Data包含应用信息",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/QueryApp": {
+            "post": {
+                "description": "搜索用户已授权的微信APP",
+                "tags": [
+                    "User"
+                ],
+                "summary": "搜索已授权的APP",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Appid为APP的AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.WxaAppGetAuthInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回已授权APP信息，Data包含APP详情",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/SubscribeMsg": {
+            "post": {
+                "description": "获取小程序订阅消息授权信息",
+                "tags": [
+                    "User"
+                ],
+                "summary": "订阅消息授权",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Appid为小程序AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.WxaAppGetAuthInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回订阅消息授权信息，Data包含授权详情",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/User/WxaAppGetAuthInfo": {
+            "post": {
+                "description": "获取指定微信小程序的授权信息",
+                "tags": [
+                    "User"
+                ],
+                "summary": "获取小程序授权信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "查询参数：Appid为小程序AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.WxaAppGetAuthInfoParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回小程序授权信息，Data包含授权详情",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/WxApp/JSLogin": {
+            "post": {
+                "description": "授权微信小程序并返回授权后的code",
+                "tags": [
+                    "WxApp"
+                ],
+                "summary": "授权小程序",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "授权参数：Appid为小程序AppID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wxapp.DefaultParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回授权结果，Data包含授权code",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/WxApp/JSOperateWxData": {
+            "post": {
+                "description": "执行微信小程序的相关操作",
+                "tags": [
+                    "WxApp"
+                ],
+                "summary": "小程序操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "操作参数：Appid为小程序AppID，Data为操作数据，Opt为操作类型",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wxapp.JSOperateWxParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回操作结果，Data包含操作状态或数据",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/WxApp/SearchSuggestion": {
+            "post": {
+                "description": "获取微信小程序的文章搜索建议",
+                "tags": [
+                    "WxApp"
+                ],
+                "summary": "获取搜索建议",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "搜索参数：Keys为搜索关键字",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wxapp.SearchsuggestionParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回搜索建议，Data包含建议列表",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/WxApp/WebSearch": {
+            "post": {
+                "description": "在微信小程序中搜索文章",
+                "tags": [
+                    "WxApp"
+                ],
+                "summary": "搜索文章",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户唯一标识 wxid",
+                        "name": "X-Wxid",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "搜索参数：Keys为搜索关键字，OffSet为分页偏移量，SuggestionID为建议ID",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/wxapp.WebSearchParam"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "返回搜索结果，Data包含文章列表",
+                        "schema": {
+                            "$ref": "#/definitions/comm.ResponseResult"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "comm.ResponseResult": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "返回码",
+                    "type": "integer"
+                },
+                "data": {
+                    "description": "数据内容"
+                },
+                "message": {
+                    "description": "错误信息",
+                    "type": "string"
+                }
+            }
+        },
+        "favor.DelParam": {
+            "description": "用于删除微信收藏项的参数结构体",
+            "type": "object",
+            "properties": {
+                "favId": {
+                    "description": "收藏项的ID，从同步收藏接口获取",
+                    "type": "integer",
+                    "example": 1001
+                }
+            }
+        },
+        "favor.GetFavItemParam": {
+            "description": "用于读取微信收藏项详细内容的参数结构体",
+            "type": "object",
+            "properties": {
+                "favId": {
+                    "description": "收藏项的ID，从同步收藏接口获取",
+                    "type": "integer",
+                    "example": 1001
+                }
+            }
+        },
+        "favor.SyncParam": {
+            "description": "用于同步微信收藏数据的参数结构体",
+            "type": "object",
+            "properties": {
+                "keyBuf": {
+                    "description": "上次同步返回的密钥，首次同步可留空",
+                    "type": "string",
+                    "example": "key123"
+                }
+            }
+        },
+        "friend.BlacklistParam": {
+            "description": "用于管理微信黑名单的参数结构体",
+            "type": "object",
+            "properties": {
+                "toWxid": {
+                    "description": "目标用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                },
+                "val": {
+                    "description": "操作值，15为添加黑名单，7为移除黑名单",
+                    "type": "integer",
+                    "example": 15
+                }
+            }
+        },
+        "friend.DeleteParam": {
+            "description": "用于删除微信好友的参数结构体",
+            "type": "object",
+            "properties": {
+                "toWxid": {
+                    "description": "要删除的好友微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "friend.GetContactDetailparameter": {
+            "type": "object",
+            "properties": {
+                "chatRoom": {
+                    "type": "string"
+                },
+                "towxids": {
+                    "type": "string"
+                }
+            }
+        },
+        "friend.GetContactListparameter": {
+            "description": "用于获取微信通讯录好友列表的参数结构体",
+            "type": "object",
+            "properties": {
+                "currentChatRoomContactSeq": {
+                    "description": "当前群聊联系人序列号，首次请求填0",
+                    "type": "integer",
+                    "example": 0
+                },
+                "currentWxcontactSeq": {
+                    "description": "当前联系人序列号，首次请求填0",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "friend.PassVerifyParam": {
+            "description": "用于通过微信好友请求的参数结构体",
+            "type": "object",
+            "properties": {
+                "scene": {
+                    "description": "场景值，从请求消息的XML中获取",
+                    "type": "integer",
+                    "example": 0
+                },
+                "v1": {
+                    "description": "申请者的V1标识",
+                    "type": "string",
+                    "example": "v1_abc123"
+                },
+                "v2": {
+                    "description": "申请者的V2标识",
+                    "type": "string",
+                    "example": "v2_xyz789"
+                }
+            }
+        },
+        "friend.SearchParam": {
+            "description": "用于搜索微信联系人的参数结构体",
+            "type": "object",
+            "properties": {
+                "fromScene": {
+                    "description": "来源场景，默认为0",
+                    "type": "integer",
+                    "example": 0
+                },
+                "searchScene": {
+                    "description": "搜索场景，默认为1",
+                    "type": "integer",
+                    "example": 1
+                },
+                "toUserName": {
+                    "description": "目标用户微信ID或用户名",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "friend.SendRequestParam": {
+            "description": "用于发送微信好友请求的参数结构体",
+            "type": "object",
+            "properties": {
+                "scene": {
+                    "description": "场景值，表示请求来源",
+                    "type": "integer",
+                    "example": 0
+                },
+                "v1": {
+                    "description": "目标用户的V1标识，必填",
+                    "type": "string",
+                    "example": "v1_abc123"
+                },
+                "v2": {
+                    "description": "目标用户的V2标识，必填",
+                    "type": "string",
+                    "example": "v2_xyz789"
+                },
+                "verifyContent": {
+                    "description": "验证消息内容",
+                    "type": "string",
+                    "example": "你好，我想加你为好友"
+                }
+            }
+        },
+        "friend.SetRemarksParam": {
+            "description": "用于设置微信好友备注的参数结构体",
+            "type": "object",
+            "properties": {
+                "remarks": {
+                    "description": "备注名称",
+                    "type": "string",
+                    "example": "好友备注"
+                },
+                "toWxid": {
+                    "description": "目标好友微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "group.AddChatRoomParam": {
+            "description": "用于添加或邀请微信群成员的参数结构体",
+            "type": "object",
+            "properties": {
+                "chatRoomName": {
+                    "description": "群聊ID",
+                    "type": "string",
+                    "example": "chatroom_001"
+                },
+                "toWxids": {
+                    "description": "目标用户微信ID列表，多个ID用逗号分隔",
+                    "type": "string",
+                    "example": "wxid_67890,wxid_54321"
+                }
+            }
+        },
+        "group.ConsentToJoinParam": {
+            "description": "用于同意通过链接加入微信群聊的参数结构体",
+            "type": "object",
+            "properties": {
+                "url": {
+                    "description": "群聊邀请链接，从消息XML中获取",
+                    "type": "string",
+                    "example": "https://weixin.qq.com/g/abc123"
+                }
+            }
+        },
+        "group.CreateChatRoomParam": {
+            "description": "用于创建微信群聊的参数结构体",
+            "type": "object",
+            "properties": {
+                "toWxids": {
+                    "description": "初始群成员微信ID列表，多个ID用逗号分隔，至少三个",
+                    "type": "string",
+                    "example": "wxid_67890,wxid_54321,wxid_98765"
+                }
+            }
+        },
+        "group.FacingCreateChatRoomParam": {
+            "description": "用于面对面创建微信群聊的参数结构体",
+            "type": "object",
+            "properties": {
+                "latitude": {
+                    "description": "纬度坐标",
+                    "type": "number",
+                    "example": 39.9042
+                },
+                "longitude": {
+                    "description": "经度坐标",
+                    "type": "number",
+                    "example": 116.4074
+                },
+                "opCode": {
+                    "description": "操作码，具体含义由业务定义",
+                    "type": "integer",
+                    "example": 1
+                },
+                "password": {
+                    "description": "面对面群聊的密码",
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "group.GetChatRoomParam": {
+            "description": "用于获取微信群聊信息或二维码的参数结构体",
+            "type": "object",
+            "properties": {
+                "gid": {
+                    "description": "群聊ID，多个ID用逗号分隔",
+                    "type": "string",
+                    "example": "chatroom_001"
+                }
+            }
+        },
+        "group.MoveContactListParam": {
+            "description": "用于将群聊保存到通讯录或移除的参数结构体",
+            "type": "object",
+            "properties": {
+                "gid": {
+                    "description": "群聊ID",
+                    "type": "string",
+                    "example": "chatroom_001"
+                },
+                "val": {
+                    "description": "操作值，3为添加，2为移除",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "group.OperateChatRoomAdminParam": {
+            "description": "用于添加、删除或转让群管理员的参数结构体",
+            "type": "object",
+            "properties": {
+                "gid": {
+                    "description": "群聊ID",
+                    "type": "string",
+                    "example": "chatroom_001"
+                },
+                "toWxids": {
+                    "description": "目标用户微信ID列表，多个ID用逗号分隔，仅用于添加或删除管理员",
+                    "type": "string",
+                    "example": "wxid_67890,wxid_54321"
+                },
+                "val": {
+                    "description": "操作值，1为添加管理员，2为删除管理员，3为转让群主",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "group.OperateChatRoomInfoParam": {
+            "description": "用于设置微信群名称或公告的参数结构体",
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "内容，设置为群名称或公告内容",
+                    "type": "string",
+                    "example": "新群名称或公告内容"
+                },
+                "gid": {
+                    "description": "群聊ID",
+                    "type": "string",
+                    "example": "chatroom_001"
+                }
+            }
+        },
+        "group.QuitGroupParam": {
+            "description": "用于退出微信群聊的参数结构体",
+            "type": "object",
+            "properties": {
+                "gid": {
+                    "description": "群聊ID",
+                    "type": "string",
+                    "example": "chatroom_001"
+                }
+            }
+        },
+        "group.ScanIntoGroupParam": {
+            "description": "用于通过链接扫码加入微信群聊的参数结构体",
+            "type": "object",
+            "properties": {
+                "url": {
+                    "description": "群聊二维码链接",
+                    "type": "string",
+                    "example": "https://weixin.qq.com/g/abc123"
+                }
+            }
+        },
+        "label.AddParam": {
+            "description": "用于添加新微信标签的参数结构体",
+            "type": "object",
+            "properties": {
+                "labelName": {
+                    "description": "标签名称",
+                    "type": "string",
+                    "example": "好友分组"
+                }
+            }
+        },
+        "label.DeleteParam": {
+            "description": "用于删除微信标签的参数结构体",
+            "type": "object",
+            "properties": {
+                "labelId": {
+                    "description": "标签ID",
+                    "type": "string",
+                    "example": "label_001"
+                }
+            }
+        },
+        "label.UpdateListParam": {
+            "description": "用于更新微信标签成员列表的参数结构体",
+            "type": "object",
+            "properties": {
+                "labelId": {
+                    "description": "标签ID",
+                    "type": "string",
+                    "example": "label_001"
+                },
+                "toWxids": {
+                    "description": "目标用户微信ID列表，多个ID用逗号分隔",
+                    "type": "string",
+                    "example": "wxid_67890,wxid_54321"
+                }
+            }
+        },
+        "label.UpdateNameParam": {
+            "description": "用于修改微信标签名称的参数结构体",
+            "type": "object",
+            "properties": {
+                "labelId": {
+                    "description": "标签ID",
+                    "type": "integer",
+                    "example": 1001
+                },
+                "newName": {
+                    "description": "新标签名称",
+                    "type": "string",
+                    "example": "新分组名称"
+                }
+            }
+        },
+        "login.GetQRReq": {
+            "description": "用于获取微信登录二维码的参数结构体",
+            "type": "object",
+            "properties": {
+                "deviceId": {
+                    "description": "设备ID，用于标识登录设备",
+                    "type": "string",
+                    "example": "device123"
+                },
+                "osType": {
+                    "description": "操作系统类型，默认为0（未知系统）",
+                    "type": "integer",
+                    "example": 0
+                },
+                "proxy": {
+                    "description": "代理信息，留空表示不使用代理",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.ProxyInfo"
+                        }
+                    ]
+                }
+            }
+        },
+        "misc.CdnDownloadImageParam": {
+            "description": "用于通过CDN下载微信图片的参数结构体",
+            "type": "object",
+            "properties": {
+                "fileAesKey": {
+                    "description": "文件AES密钥",
+                    "type": "string",
+                    "example": "aes_123456"
+                },
+                "fileNo": {
+                    "description": "文件编号",
+                    "type": "string",
+                    "example": "file_001"
+                }
+            }
+        },
+        "misc.DownloadAppAttachParam": {
+            "description": "用于下载微信文件附件的参数结构体",
+            "type": "object",
+            "properties": {
+                "appId": {
+                    "description": "应用ID",
+                    "type": "string",
+                    "example": "appid_001"
+                },
+                "attachId": {
+                    "description": "附件ID",
+                    "type": "string",
+                    "example": "attach_001"
+                },
+                "dataLen": {
+                    "description": "数据长度，从消息XML中获取",
+                    "type": "integer",
+                    "example": 2048
+                },
+                "section": {
+                    "description": "下载数据段信息",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/misc.Section"
+                        }
+                    ]
+                },
+                "userName": {
+                    "description": "发送附件的用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "misc.DownloadParam": {
+            "description": "用于下载微信图片或视频的参数结构体",
+            "type": "object",
+            "properties": {
+                "compressType": {
+                    "description": "压缩类型",
+                    "type": "integer",
+                    "example": 0
+                },
+                "dataLen": {
+                    "description": "数据长度，从消息XML中获取",
+                    "type": "integer",
+                    "example": 2048
+                },
+                "msgId": {
+                    "description": "消息ID",
+                    "type": "integer",
+                    "example": 1001
+                },
+                "section": {
+                    "description": "下载数据段信息",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/misc.Section"
+                        }
+                    ]
+                },
+                "toWxid": {
+                    "description": "目标用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "misc.DownloadVoiceParam": {
+            "description": "用于下载微信语音消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "bufid": {
+                    "description": "语音缓冲区ID",
+                    "type": "string",
+                    "example": "buf_001"
+                },
+                "fromUserName": {
+                    "description": "发送语音的用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                },
+                "length": {
+                    "description": "语音数据长度",
+                    "type": "integer",
+                    "example": 1024
+                },
+                "msgId": {
+                    "description": "消息ID",
+                    "type": "integer",
+                    "example": 1001
+                }
+            }
+        },
+        "misc.GetA8KeyParam": {
+            "description": "用于获取微信A8Key的参数结构体",
+            "type": "object",
+            "properties": {
+                "codeType": {
+                    "description": "代码类型，默认为19",
+                    "type": "integer",
+                    "example": 19
+                },
+                "codeVersion": {
+                    "description": "代码版本，默认为5",
+                    "type": "integer",
+                    "example": 5
+                },
+                "cookieBase64": {
+                    "description": "Cookie的Base64编码数据",
+                    "type": "string",
+                    "example": "data:application/octet-stream;base64,QUJD"
+                },
+                "flag": {
+                    "description": "标志位",
+                    "type": "integer",
+                    "example": 0
+                },
+                "netType": {
+                    "description": "网络类型",
+                    "type": "string",
+                    "example": "wifi"
+                },
+                "opCode": {
+                    "description": "操作码，默认为2",
+                    "type": "integer",
+                    "example": 2
+                },
+                "reqUrl": {
+                    "description": "请求URL",
+                    "type": "string",
+                    "example": "https://weixin.qq.com"
+                },
+                "scene": {
+                    "description": "场景值，默认为4",
+                    "type": "integer",
+                    "example": 4
+                }
+            }
+        },
+        "misc.Section": {
+            "description": "用于指定下载数据段的起始位置和长度的结构体",
+            "type": "object",
+            "properties": {
+                "dataLen": {
+                    "description": "数据长度",
+                    "type": "integer",
+                    "example": 1024
+                },
+                "startPos": {
+                    "description": "起始位置",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "misc.ThirdAppGrantParam": {
+            "description": "用于授权第三方应用的参数结构体",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "第三方应用ID",
+                    "type": "string",
+                    "example": "appid_001"
+                }
+            }
+        },
+        "model.ProxyInfo": {
+            "description": "用于配置代理的参数结构体",
+            "type": "object",
+            "properties": {
+                "proxyIp": {
+                    "description": "代理服务器的IP地址",
+                    "type": "string",
+                    "example": ""
+                },
+                "proxyPassword": {
+                    "description": "代理服务器的密码，留空表示无需认证",
+                    "type": "string",
+                    "example": ""
+                },
+                "proxyUser": {
+                    "description": "代理服务器的用户名，留空表示无需认证",
+                    "type": "string",
+                    "example": ""
+                }
+            }
+        },
+        "msg.DefaultParam": {
+            "description": "用于发送默认文本消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "消息内容",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.RevokeMsgParam": {
+            "type": "object",
+            "properties": {
+                "clientMsgId": {
+                    "type": "integer"
+                },
+                "createTime": {
+                    "type": "integer"
+                },
+                "newMsgId": {
+                    "type": "integer"
+                },
+                "toUserName": {
+                    "type": "string"
+                },
+                "wxid": {
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendAppMsgParam": {
+            "description": "用于发送小程序消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "小程序消息类型",
+                    "type": "integer"
+                },
+                "xml": {
+                    "description": "小程序的XML数据",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendEmojiParam": {
+            "description": "用于发送表情消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "md5": {
+                    "description": "表情数据的MD5校验值",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                },
+                "totalLen": {
+                    "description": "表情数据总长度",
+                    "type": "integer"
+                }
+            }
+        },
+        "msg.SendImageMsgParam": {
+            "description": "用于发送图片消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "base64": {
+                    "description": "图片的Base64编码数据",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendNewMsgParam": {
+            "description": "用于发送文本消息的参数结构体，支持单聊或群聊",
+            "type": "object",
+            "properties": {
+                "at": {
+                    "description": "群聊中@的微信ID列表，逗号分隔",
+                    "type": "string",
+                    "example": "friend1,friend2"
+                },
+                "content": {
+                    "description": "要发送的文本消息内容",
+                    "type": "string",
+                    "example": "Hello, world!"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID（单聊）或群ID（群聊）",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "msg.SendQuoteMsgParam": {
+            "description": "用于发送引用消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "displayname": {
+                    "description": "引用消息的显示名称",
+                    "type": "string"
+                },
+                "fromusr": {
+                    "description": "引用消息的发送者微信ID",
+                    "type": "string"
+                },
+                "msgContent": {
+                    "description": "新消息的内容",
+                    "type": "string"
+                },
+                "msgSeq": {
+                    "description": "消息序列号",
+                    "type": "string"
+                },
+                "newMsgId": {
+                    "description": "新消息的ID",
+                    "type": "string"
+                },
+                "quoteContent": {
+                    "description": "引用的消息内容",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendShareLinkMsgParam": {
+            "description": "用于分享链接消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "desc": {
+                    "description": "链接描述",
+                    "type": "string"
+                },
+                "thumbUrl": {
+                    "description": "链接缩略图URL",
+                    "type": "string"
+                },
+                "title": {
+                    "description": "链接标题",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "链接URL",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendVideoMsgParam": {
+            "description": "用于发送视频消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "base64": {
+                    "description": "视频内容的Base64编码",
+                    "type": "string"
+                },
+                "imageBase64": {
+                    "description": "视频封面的Base64编码",
+                    "type": "string"
+                },
+                "playLength": {
+                    "description": "视频播放时长（秒）",
+                    "type": "integer"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.SendVoiceMessageParam": {
+            "type": "object",
+            "properties": {
+                "base64": {
+                    "type": "string"
+                },
+                "toWxid": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "integer"
+                },
+                "voiceTime": {
+                    "type": "integer"
+                },
+                "wxid": {
+                    "type": "string"
+                }
+            }
+        },
+        "msg.ShareCardParam": {
+            "description": "用于分享微信名片的参数结构体",
+            "type": "object",
+            "properties": {
+                "cardAlias": {
+                    "description": "名片的别名",
+                    "type": "string"
+                },
+                "cardNickName": {
+                    "description": "名片的昵称",
+                    "type": "string"
+                },
+                "cardWxId": {
+                    "description": "名片所属的微信ID",
+                    "type": "string"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                }
+            }
+        },
+        "msg.ShareLocationParam": {
+            "description": "用于分享地理位置的参数结构体",
+            "type": "object",
+            "properties": {
+                "infourl": {
+                    "description": "位置的附加信息URL",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "位置标签或描述",
+                    "type": "string"
+                },
+                "poiname": {
+                    "description": "位置名称",
+                    "type": "string"
+                },
+                "scale": {
+                    "description": "地图缩放比例",
+                    "type": "number"
+                },
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                },
+                "x": {
+                    "description": "经度坐标",
+                    "type": "number"
+                },
+                "y": {
+                    "description": "纬度坐标",
+                    "type": "number"
+                }
+            }
+        },
+        "msg.ShareVideoMsgParam": {
+            "description": "用于分享视频消息的参数结构体",
+            "type": "object",
+            "properties": {
+                "toWxid": {
+                    "description": "接收者的微信ID",
+                    "type": "string"
+                },
+                "xml": {
+                    "description": "视频消息的XML数据",
+                    "type": "string"
+                }
+            }
+        },
+        "official.BizProfileV2Param": {
+            "description": "用于拉取公众号历史文章列表",
+            "type": "object",
+            "properties": {
+                "bizUserName": {
+                    "description": "公众号的 biz 用户名",
+                    "type": "string",
+                    "example": "gh_abcdef123456"
+                },
+                "pageSize": {
+                    "description": "每页条数",
+                    "type": "integer",
+                    "example": 10
+                },
+                "scene": {
+                    "description": "来源场景值（例如搜索、聊天等）",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "official.DefaultParam": {
+            "description": "通用基础参数（适用于关注、取消关注等）",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "公众号 AppID",
+                    "type": "string",
+                    "example": "wx9876543210"
+                }
+            }
+        },
+        "official.GetkeyParam": {
+            "description": "用于授权或 JSAPI 签名等场景",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "公众号 AppID",
+                    "type": "string",
+                    "example": "wx9876543210"
+                },
+                "url": {
+                    "description": "需要签名或授权的 URL",
+                    "type": "string",
+                    "example": "https://example.com/page"
+                }
+            }
+        },
+        "official.ReadParam": {
+            "description": "用于处理文章相关的读取操作（阅读、评论、点赞等）",
+            "type": "object",
+            "properties": {
+                "url": {
+                    "description": "公众号文章链接",
+                    "type": "string",
+                    "example": "https://mp.weixin.qq.com/s/example123"
+                }
+            }
+        },
+        "sns.CommentParam": {
+            "description": "用于对朋友圈内容进行点赞或评论的参数结构体",
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "评论内容（当Type为2或3时有效）",
+                    "type": "string",
+                    "example": "好棒！"
+                },
+                "id": {
+                    "description": "朋友圈内容ID",
+                    "type": "string",
+                    "example": "sns_001"
+                },
+                "replyCommnetId": {
+                    "description": "回复的评论ID（当Type为2或3时有效）",
+                    "type": "integer",
+                    "example": 0
+                },
+                "type": {
+                    "description": "操作类型，1为点赞，2为文本评论，3为消息评论，4为with，5为陌生人点赞",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "sns.GetDetailparameter": {
+            "description": "用于获取指定用户朋友圈内容的参数结构体",
+            "type": "object",
+            "properties": {
+                "fristpagemd5": {
+                    "description": "首页MD5值，首次请求留空",
+                    "type": "string",
+                    "example": ""
+                },
+                "maxid": {
+                    "description": "最大朋友圈ID，首次请求填0",
+                    "type": "integer",
+                    "example": 0
+                },
+                "towxid": {
+                    "description": "目标用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "sns.GetIdDetailParam": {
+            "description": "用于获取指定朋友圈内容详情的参数结构体",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "朋友圈内容ID",
+                    "type": "integer",
+                    "example": 1001
+                },
+                "towxid": {
+                    "description": "发布朋友圈的用户微信ID",
+                    "type": "string",
+                    "example": "wxid_67890"
+                }
+            }
+        },
+        "sns.GetListParam": {
+            "description": "用于获取朋友圈首页列表的参数结构体",
+            "type": "object",
+            "properties": {
+                "fristpagemd5": {
+                    "description": "首页MD5值，首次请求留空",
+                    "type": "string",
+                    "example": ""
+                },
+                "maxid": {
+                    "description": "最大朋友圈ID，首次请求填0",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "sns.Messagearameter": {
+            "description": "用于发布朋友圈内容的参数结构体",
+            "type": "object",
+            "properties": {
+                "blackList": {
+                    "description": "黑名单用户微信ID列表，逗号分隔",
+                    "type": "string",
+                    "example": "wxid_111,wxid_222"
+                },
+                "content": {
+                    "description": "朋友圈内容，需自行构造XML",
+                    "type": "string",
+                    "example": "\u003cxml\u003e\u003ccontent\u003e朋友圈文本\u003c/content\u003e\u003c/xml\u003e"
+                },
+                "withUserList": {
+                    "description": "指定可见用户微信ID列表，逗号分隔",
+                    "type": "string",
+                    "example": "wxid_67890,wxid_54321"
+                }
+            }
+        },
+        "sns.MmSnsSyncParam": {
+            "description": "用于同步微信朋友圈数据的参数结构体",
+            "type": "object",
+            "properties": {
+                "synckey": {
+                    "description": "同步密钥，首次同步可留空",
+                    "type": "string",
+                    "example": ""
+                }
+            }
+        },
+        "sns.OperationParam": {
+            "description": "用于执行朋友圈操作（如删除、设置隐私等）的参数结构体",
+            "type": "object",
+            "properties": {
+                "commnetId": {
+                    "description": "评论ID（当Type为4时有效）",
+                    "type": "integer",
+                    "example": 0
+                },
+                "id": {
+                    "description": "朋友圈内容ID",
+                    "type": "string",
+                    "example": "sns_001"
+                },
+                "type": {
+                    "description": "操作类型，1为删除朋友圈，2为设为隐私，3为设为公开，4为删除评论，5为取消点赞",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "sns.PrivacySettingsParam": {
+            "description": "用于设置微信朋友圈权限的参数结构体",
+            "type": "object",
+            "properties": {
+                "function": {
+                    "description": "功能代码，具体值需联系客服获取",
+                    "type": "integer",
+                    "example": 1
+                },
+                "value": {
+                    "description": "设置值，具体含义由功能代码决定",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "sns.SnsUploadParam": {
+            "description": "用于上传朋友圈图片或视频的参数结构体",
+            "type": "object",
+            "properties": {
+                "base64": {
+                    "description": "图片或视频的Base64编码数据",
+                    "type": "string",
+                    "example": "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+                }
+            }
+        },
+        "user.GetQRCodeParam": {
+            "description": "用于获取微信用户个人二维码的参数结构体",
+            "type": "object",
+            "properties": {
+                "style": {
+                    "description": "二维码样式，8为默认样式",
+                    "type": "integer",
+                    "example": 8
+                }
+            }
+        },
+        "user.GetUserAuthListParam": {
+            "description": "用于获取用户已授权应用列表的参数结构体",
+            "type": "object",
+            "properties": {
+                "keyWord": {
+                    "description": "搜索关键字",
+                    "type": "string",
+                    "example": "app"
+                },
+                "nextPageData": {
+                    "description": "分页数据，0为获取817以前授权，1为817以后授权",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "user.WxaAppGetAuthInfoParam": {
+            "description": "用于获取微信小程序授权信息的参数结构体",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "小程序或应用的AppID",
+                    "type": "string",
+                    "example": "wxa_001"
+                }
+            }
+        },
+        "wxapp.DefaultParam": {
+            "description": "用于小程序授权的基础参数结构体",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "小程序的AppID",
+                    "type": "string",
+                    "example": "wxa_001"
+                }
+            }
+        },
+        "wxapp.JSOperateWxParam": {
+            "description": "用于执行微信小程序操作的参数结构体",
+            "type": "object",
+            "properties": {
+                "appid": {
+                    "description": "小程序的AppID",
+                    "type": "string",
+                    "example": "wxa_001"
+                },
+                "data": {
+                    "description": "操作数据",
+                    "type": "string",
+                    "example": "operation_data"
+                },
+                "opt": {
+                    "description": "操作类型",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "wxapp.SearchsuggestionParam": {
+            "description": "用于获取微信小程序搜索建议的参数结构体",
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "description": "搜索关键字",
+                    "type": "string",
+                    "example": "文章"
+                }
+            }
+        },
+        "wxapp.WebSearchParam": {
+            "description": "用于执行微信小程序网页搜索的参数结构体",
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "description": "搜索关键字",
+                    "type": "string",
+                    "example": "文章"
+                },
+                "offSet": {
+                    "description": "偏移量，用于分页",
+                    "type": "integer",
+                    "example": 0
+                },
+                "suggestionId": {
+                    "description": "建议ID",
+                    "type": "string",
+                    "example": "sugg_001"
+                }
+            }
+        }
+    }
+}

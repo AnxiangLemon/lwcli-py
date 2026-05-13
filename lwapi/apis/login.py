@@ -1,13 +1,14 @@
 # lwapi/apis/login.py
 import asyncio
 from enum import IntEnum
-from typing import Optional, Dict, Any,Tuple
+from typing import Optional, Dict, Any, Tuple, AsyncIterator
 
 import httpx
 from httpx import ConnectError, NetworkError, TimeoutException
 from loguru import logger
 
 from ..transport import AsyncHTTPTransport
+from ..exceptions import ApiError, HttpError, is_wrapped_request_timeout
 from ..models.login import (
     QRGetRequest,
     QRGetResponse,
@@ -166,6 +167,143 @@ class LoginClient:
             # asyncio.timeout 抛的是 TimeoutError，这里换成你想要的信息
             raise asyncio.TimeoutError("二维码登录超时")
 
+    async def stream_qr_status(
+        self,
+        uuid: str,
+        *,
+        interval: float = 3.0,
+        timeout: float = 300.0,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        异步迭代 QRCheck 轮询结果，供 WebSocket 推送扫码状态（替代阻塞版 check_qr_code）。
+        事件类型：poll | status | verify_url | success | error | stopped
+        """
+        last_status: Optional[QRStatus] = None
+        last_verify_url: Optional[str] = None
+        net_failures = 0
+
+        def phase_for(status_val: Optional[int]) -> str:
+            if status_val is None:
+                return "unknown"
+            try:
+                st = QRStatus(status_val)
+            except ValueError:
+                return "unknown"
+            return {
+                QRStatus.NOT_SCANNED: "waiting",
+                QRStatus.SCANNED: "scanned",
+                QRStatus.CONFIRMING: "confirming",
+                QRStatus.CANCELED: "canceled",
+            }.get(st, "unknown")
+
+        try:
+            async with asyncio.timeout(timeout):
+                poll_seq = 0
+                while True:
+                    if stop_event is not None and stop_event.is_set():
+                        yield {"event": "stopped", "message": "监听已取消"}
+                        return
+                    try:
+                        payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+                        net_failures = 0
+                        poll_seq += 1
+
+                        ret, err_msg = _extract_ret_errmsg(payload)
+                        wxid, nickname = _extract_login_user(payload)
+
+                        yield {
+                            "event": "poll",
+                            "seq": poll_seq,
+                            "ret": ret,
+                            "err_msg": err_msg,
+                        }
+
+                        if ret == 0 and wxid:
+                            yield {
+                                "event": "success",
+                                "wxid": wxid,
+                                "nickname": nickname or "",
+                            }
+                            return
+
+                        if ret == QRStatus.EXPIRED:
+                            yield {
+                                "event": "error",
+                                "code": "expired",
+                                "message": "二维码已过期",
+                            }
+                            return
+
+                        qr = QRCheckResponse.model_validate(payload)
+                        verify_url = getattr(qr, "verifyUrl", None) or payload.get(
+                            "verifyUrl"
+                        )
+                        status_val = getattr(qr, "status", None)
+                        current_status: Optional[QRStatus] = None
+                        if status_val is not None:
+                            try:
+                                current_status = QRStatus(status_val)
+                            except ValueError:
+                                current_status = None
+
+                        if verify_url and verify_url != last_verify_url:
+                            yield {"event": "verify_url", "url": verify_url}
+                            last_verify_url = verify_url
+
+                        status_changed = current_status != last_status
+                        if status_changed:
+                            yield {
+                                "event": "status",
+                                "phase": phase_for(status_val),
+                                "raw_status": status_val,
+                                "ret": ret,
+                            }
+                            last_status = current_status
+
+                        if current_status is QRStatus.CANCELED:
+                            yield {
+                                "event": "error",
+                                "code": "canceled",
+                                "message": "二维码已被取消",
+                            }
+                            return
+
+                        if ret is not None and ret != 0:
+                            yield {
+                                "event": "error",
+                                "code": "api",
+                                "message": err_msg or f"ret={ret}",
+                                "ret": ret,
+                            }
+                            return
+
+                    except LoginError as e:
+                        yield {"event": "error", "code": "login", "message": str(e)}
+                        return
+                    except (ConnectError, NetworkError, TimeoutException) as e:
+                        net_failures += 1
+                        yield {
+                            "event": "warning",
+                            "code": "network",
+                            "message": str(e),
+                            "failures": net_failures,
+                        }
+                    except Exception as e:
+                        net_failures += 1
+                        yield {
+                            "event": "warning",
+                            "code": "poll_error",
+                            "message": str(e),
+                            "failures": net_failures,
+                        }
+
+                    backoff = min(30.0, interval * (2 ** min(net_failures, 3)))
+                    await asyncio.sleep(max(0.2, backoff))
+
+        except TimeoutError:
+            yield {"event": "error", "code": "timeout", "message": "二维码登录超时"}
+
     # ==================== 永久心跳（支持重复登录） ====================
     async def _heartbeat_worker(self, interval: int = 60) -> None:
         self._stop_heartbeat.clear()
@@ -173,10 +311,17 @@ class LoginClient:
         try:
             while not self._stop_heartbeat.is_set():
                 try:
-                    await self.t.post("/Login/HeartBeat")
-                
+                    await self.t.post("/Login/HeartBeat", timeout=45.0)
+
                 except httpx.ReadTimeout:
-                # 长轮询超时是正常现象，继续下一次
+                    continue
+                except HttpError as e:
+                    if is_wrapped_request_timeout(e):
+                        logger.debug("心跳请求超时，稍后重试")
+                        await asyncio.sleep(2)
+                        continue
+                    logger.warning(f"心跳 HTTP 异常（将继续）: {e}")
+                    await asyncio.sleep(5)
                     continue
                 except LoginError as e:
                     logger.warning(f"心跳业务异常（将继续）: {e}")
@@ -225,16 +370,18 @@ class LoginClient:
 
     # ==================== 其他登录相关接口 ====================
     async def logout(self) -> bool:
+        """退出登录并停止心跳。"""
         self.stop_heartbeat()
         await self.t.post("/Login/LogOut")
+        return True
 
     async def sec_auto_login(self) -> bool:
         try:
             await self.t.post("/Login/SecAutoAuth")
-            # 暂时不对这个做 检测 但是可能会失效 我觉得 
+            # 这里先按接口 code==200 视为成功，后续可按业务字段再做更细判断。
             logger.success("二次免扫码登录成功")
             return True
-        except LoginError as e:
+        except (ApiError, HttpError) as e:
             logger.error(f"二次登录失败: {e}")
             return False
 
@@ -243,7 +390,7 @@ class LoginClient:
             await self.t.post("/Login/Awaken")
             logger.success("会话唤醒成功")
             return True
-        except LoginError as e:
+        except (ApiError, HttpError) as e:
             logger.warning(f"会话唤醒失败: {e}")
             return False
 
@@ -252,7 +399,7 @@ class LoginClient:
             await self.t.post("/Login/Reportclientcheck")
             logger.info("客户端环境上报成功")
             return True
-        except LoginError as e:
+        except (ApiError, HttpError) as e:
             logger.error(f"环境上报失败: {e}")
             return False
 
@@ -261,7 +408,7 @@ class LoginClient:
             await self.t.post("/Login/LongLinkCreate")
             logger.success("长连接创建成功")
             return True
-        except LoginError as e:
+        except (ApiError, HttpError) as e:
             logger.error(f"长连接创建失败: {e}")
             return False
 
@@ -271,7 +418,7 @@ class LoginClient:
             await self.t.post("/Login/LongRemove")
             logger.success("长连接已断开")
             return True
-        except LoginError as e:
+        except (ApiError, HttpError) as e:
             logger.error(f"断开长连接失败: {e}")
             return False
 

@@ -1,6 +1,7 @@
 # models/msg.py
 from ..models import BaseModelWithConfig
 from typing import List, Optional
+from pydantic import Field
 
 class SKBuiltinString_t(BaseModelWithConfig):
     """内置字符串类型"""
@@ -29,18 +30,19 @@ class AddMsg(BaseModelWithConfig):
 
 class SyncMessageResponse(BaseModelWithConfig):
     """同步消息响应结构"""
-    modUserInfos: Optional[List] = []    # 修改的用户信息
-    modContacts: Optional[List] = []      # 修改的联系人
-    delContacts: Optional[List] = []      # 删除的联系人
-    functionSwitchs: Optional[List] = []  # 功能开关
-    addMsgs: Optional[List[AddMsg]] = []  # 新增消息
-    modUserImgs: Optional[List] = []      # 修改的用户头像
-    userInfoExts: Optional[List] = []     # 用户扩展信息
-    snsObjects: Optional[List] = []       # SNS对象
-    snsActionGroups: Optional[List] = []  # SNS操作组
-    delChatContacts: Optional[List] = []  # 删除的聊天联系人
-    modChatRoomMembers: Optional[List] = [] # 修改的聊天室成员
-    quitChatRooms: Optional[List] = []    # 退出的聊天室
-    modChatRoomNotifys: Optional[List] = []  # 修改的聊天室通知
-    modChatRoomTopics: Optional[List] = []   # 修改的聊天室主题
+    # 使用 default_factory 避免“可变默认值”在多次实例化之间共享。
+    modUserInfos: Optional[List] = Field(default_factory=list)  # 修改的用户信息
+    modContacts: Optional[List] = Field(default_factory=list)  # 修改的联系人
+    delContacts: Optional[List] = Field(default_factory=list)  # 删除的联系人
+    functionSwitchs: Optional[List] = Field(default_factory=list)  # 功能开关
+    addMsgs: Optional[List[AddMsg]] = Field(default_factory=list)  # 新增消息
+    modUserImgs: Optional[List] = Field(default_factory=list)  # 修改的用户头像
+    userInfoExts: Optional[List] = Field(default_factory=list)  # 用户扩展信息
+    snsObjects: Optional[List] = Field(default_factory=list)  # SNS对象
+    snsActionGroups: Optional[List] = Field(default_factory=list)  # SNS操作组
+    delChatContacts: Optional[List] = Field(default_factory=list)  # 删除的聊天联系人
+    modChatRoomMembers: Optional[List] = Field(default_factory=list)  # 修改的聊天室成员
+    quitChatRooms: Optional[List] = Field(default_factory=list)  # 退出的聊天室
+    modChatRoomNotifys: Optional[List] = Field(default_factory=list)  # 修改的聊天室通知
+    modChatRoomTopics: Optional[List] = Field(default_factory=list)  # 修改的聊天室主题
     keyBuf: Optional[SKBuiltinBuffer_t] = None  # 同步密钥

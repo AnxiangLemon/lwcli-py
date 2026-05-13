@@ -1,14 +1,15 @@
 # src/main.py
-import asyncio
-from .bot_manager import start_all_bots
+import os
+from aiohttp import web
 from .utils import setup_logger
+from .web.app import create_app
 
-async def main():
+def main() -> None:
     setup_logger("main")
-    try:
-        await start_all_bots()
-    except KeyboardInterrupt:
-        print("\n\n用户主动退出，拜拜")
+    host = os.getenv("LWAPI_WEB_HOST", "0.0.0.0")
+    port = int(os.getenv("LWAPI_WEB_PORT", "8090"))
+    print(f"Web 控制台已启动: http://{host}:{port}")
+    web.run_app(create_app(), host=host, port=port)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

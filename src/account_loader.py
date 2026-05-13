@@ -24,3 +24,16 @@ def load_accounts() -> List[Dict]:
 
 def save_accounts(accounts: List[Dict]) -> None:
     atomic_write_json(CONFIG_FILE, accounts)
+
+
+def load_accounts_safe() -> List[Dict]:
+    """Web 控制台使用：无文件或损坏时返回空列表，不退出进程。"""
+    if not CONFIG_FILE.exists():
+        return []
+    try:
+        text = CONFIG_FILE.read_text(encoding="utf-8")
+        data = json.loads(text)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"读取 {CONFIG_FILE} 失败，返回空列表: {e}")
+        return []

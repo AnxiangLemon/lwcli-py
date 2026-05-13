@@ -14,12 +14,19 @@ class AsyncHTTPTransport:
         self._config = config
         self._client = httpx.AsyncClient(timeout=config.timeout)
 
-    async def post(self, path: str, 
-                   json: Optional[dict] = None,
-                   params: Optional[dict] = None,
-                   *,
-                   response_model: Type[_T] = dict  # 默认返回 dict，避免每次都写
-                   ) -> _T:
+    async def aclose(self) -> None:
+        """关闭底层连接池，避免程序退出时出现未关闭连接告警。"""
+        await self._client.aclose()
+
+    async def post(
+        self,
+        path: str,
+        json: Optional[dict] = None,
+        params: Optional[dict] = None,
+        *,
+        timeout: Optional[float] = None,
+        response_model: Type[_T] = dict,  # 默认返回 dict，避免每次都写
+    ) -> _T:
         """
         完全兼容 Python 3.9+ 的泛型 post
         - 自动加 X-Wxid
@@ -33,7 +40,13 @@ class AsyncHTTPTransport:
         url = self._config.api_url(path)
 
         try:
-            response = await self._client.post(url, json=json, params=params, headers=headers)
+            response = await self._client.post(
+                url,
+                json=json,
+                params=params,
+                headers=headers,
+                timeout=timeout if timeout is not None else self._config.timeout,
+            )
         except httpx.TimeoutException:
             raise HttpError(0, "request timeout")
         except httpx.NetworkError as e:
