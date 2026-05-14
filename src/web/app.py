@@ -12,14 +12,13 @@ import json
 from pathlib import Path
 
 from aiohttp import web, WSMsgType
-from loguru import logger
 
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService
-from src.utils import read_account_today_log_tail, setup_logger
+from src.utils import read_account_today_log_tail
 
 STATIC_DIR = Path(__file__).parent / "static"
 
