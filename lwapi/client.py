@@ -1,18 +1,49 @@
 # lwapi/client.py
 from .config import ClientConfig
 from .transport import AsyncHTTPTransport
+from .apis.favor import FavorClient
+from .apis.finder import FinderClient
+from .apis.friend import FriendClient
+from .apis.group import GroupClient
+from .apis.label import LabelClient
 from .apis.login import LoginClient
+from .apis.mmsns import MmSnsClient
 from .apis.msg import MsgClient
+from .apis.official import OfficialClient
+from .apis.other import OtherClient
+from .apis.user import UserClient
+from .apis.wxapp import WxAppClient
+
 
 class LwApiClient:
-    """LwApi 异步 SDK：对外以领域客户端为主（login / msg），请求体用 models 中的类型拼装。"""
+    """
+    LwApi 异步 SDK。
+
+    - ``login``：扫码登录、心跳、长连接等（LoginClient）。
+    - ``msg``：消息长轮询与各类发送接口（参数由 SDK 组装 JSON）。
+    - ``favor`` / ``friend`` / ``group`` 等：其它业务域的同类封装。
+    """
 
     def __init__(self, base_url: str, timeout: float = 30.0):
         """初始化 SDK 客户端。timeout 为普通接口默认超时；消息 Sync 等在各自调用处单独放宽。"""
         self.config = ClientConfig(base_url=base_url, timeout=timeout)
         self.transport = AsyncHTTPTransport(config=self.config)
-        self.login = LoginClient(self.transport)
-        self.msg = MsgClient(self.transport)
+        
+        t = self.transport
+        self.login = LoginClient(t)
+        self.msg = MsgClient(t)
+
+        self.favor = FavorClient(t)
+        self.finder = FinderClient(t)
+        self.friend = FriendClient(t)
+        self.group = GroupClient(t)
+        self.label = LabelClient(t)
+        self.mmsns = MmSnsClient(t)
+        self.official = OfficialClient(t)
+        self.other = OtherClient(t)
+        self.user = UserClient(t)
+        self.wxapp = WxAppClient(t)
+
         # 反向注入 client，便于消息回调里拿到完整 SDK 能力。
         self.msg.client = self
         # 用于控制整个客户端生命周期，防止重复关闭。

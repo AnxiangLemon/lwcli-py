@@ -11,13 +11,27 @@ import base64
 import asyncio
 import httpx
 from loguru import logger
-from typing import Callable, Awaitable, Optional
+from typing import Callable, Awaitable, Optional, Any
 
 # 导入根客户端类型（前向声明也可以，但这里直接导入更清晰）
 from ..exceptions import HttpError, is_wrapped_request_timeout
 from ..transport import AsyncHTTPTransport
 from ..models.msg import SyncMessageResponse
-from ..models.msg_requests import SendImageMsgParam, SendNewMsgParam
+from ..models.msg_requests import (
+    MsgForwardXmlParam,
+    RevokeMsgParam,
+    SendAppMsgParam,
+    SendEmojiParam,
+    SendImageMsgParam,
+    SendNewMsgParam,
+    SendQuoteMsgParam,
+    SendShareLinkMsgParam,
+    SendVideoMsgParam,
+    SendVoiceMessageParam,
+    ShareCardParam,
+    ShareLocationParam,
+    ShareVideoXmlParam,
+)
 
 MessageHandler = Callable[["LwApiClient", SyncMessageResponse], Awaitable[None]]
 
@@ -37,6 +51,15 @@ class MsgClient:
     async def _sync_once(self) -> SyncMessageResponse:
         """单次同步消息（服务端长轮询，超时需明显长于普通接口）。"""
         data = await self.t.post("/Msg/Sync", timeout=180.0)
+        return SyncMessageResponse.model_validate(data)
+
+    async def sync_messages(self, *, timeout: float = 180.0) -> SyncMessageResponse:
+        """
+        主动拉取一次消息同步（长轮询）。
+
+        与内部轮询使用同一接口；一般无需单独调用，除非自建轮询逻辑。
+        """
+        data = await self.t.post("/Msg/Sync", timeout=timeout)
         return SyncMessageResponse.model_validate(data)
 
     async def _polling_loop(self):
@@ -141,6 +164,237 @@ class MsgClient:
         # 统一返回原始结构，便于你判断成功失败
         return data
 
+    async def revoke_message(
+        self,
+        *,
+        new_msg_id: Optional[int] = None,
+        client_msg_id: Optional[int] = None,
+        create_time: Optional[int] = None,
+        to_user_name: Optional[str] = None,
+        wxid: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """撤回消息（按服务端要求填写标识字段）。"""
+        return await self.t.post(
+            "/Msg/Revoke",
+            json=RevokeMsgParam(
+                new_msg_id=new_msg_id,
+                client_msg_id=client_msg_id,
+                create_time=create_time,
+                to_user_name=to_user_name,
+                wxid=wxid,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_app_message(
+        self, to_wxid: str, xml: str, msg_type: int, *, timeout: Optional[float] = None
+    ) -> Any:
+        """发送小程序消息。"""
+        return await self.t.post(
+            "/Msg/SendApp",
+            json=SendAppMsgParam(to_wxid=to_wxid, xml=xml, msg_type=msg_type).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_cdn_file(
+        self, to_wxid: str, content_xml: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """转发 CDN 文件消息（content 为消息 XML）。"""
+        return await self.t.post(
+            "/Msg/SendCDNFile",
+            json=MsgForwardXmlParam(to_wxid=to_wxid, content=content_xml).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_cdn_image(
+        self, to_wxid: str, content_xml: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """转发 CDN 图片消息。"""
+        return await self.t.post(
+            "/Msg/SendCDNImg",
+            json=MsgForwardXmlParam(to_wxid=to_wxid, content=content_xml).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_cdn_video(
+        self, to_wxid: str, content_xml: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """转发 CDN 视频消息。"""
+        return await self.t.post(
+            "/Msg/SendCDNVideo",
+            json=MsgForwardXmlParam(to_wxid=to_wxid, content=content_xml).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_emoji(
+        self, to_wxid: str, total_len: int, md5: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """发送表情消息。"""
+        return await self.t.post(
+            "/Msg/SendEmoji",
+            json=SendEmojiParam(to_wxid=to_wxid, total_len=total_len, md5=md5).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_quote_message(
+        self,
+        to_wxid: str,
+        fromusr: str,
+        displayname: str,
+        new_msg_id: str,
+        msg_content: str,
+        quote_content: str,
+        msg_seq: str = "0",
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """发送引用消息。"""
+        return await self.t.post(
+            "/Msg/SendQuote",
+            json=SendQuoteMsgParam(
+                to_wxid=to_wxid,
+                fromusr=fromusr,
+                displayname=displayname,
+                new_msg_id=new_msg_id,
+                msg_content=msg_content,
+                quote_content=quote_content,
+                msg_seq=msg_seq,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_video_message(
+        self,
+        to_wxid: str,
+        play_length: int,
+        video_b64: str,
+        image_base64: str,
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """发送视频消息（视频与封面均为 Base64）。"""
+        return await self.t.post(
+            "/Msg/SendVideo",
+            json=SendVideoMsgParam(
+                to_wxid=to_wxid,
+                play_length=play_length,
+                video_b64=video_b64,
+                image_base64=image_base64,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def send_voice_message(
+        self,
+        to_wxid: str,
+        voice_b64: str,
+        voice_type: int,
+        voice_time_ms: int,
+        wxid: Optional[str] = None,
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """发送语音消息（voice_type：AMR=0, MP3=2 等；voice_time_ms 为毫秒）。"""
+        return await self.t.post(
+            "/Msg/SendVoice",
+            json=SendVoiceMessageParam(
+                to_wxid=to_wxid,
+                voice_b64=voice_b64,
+                voice_type=voice_type,
+                voice_time=voice_time_ms,
+                wxid=wxid,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def share_card(
+        self,
+        to_wxid: str,
+        card_wx_id: str,
+        card_nick_name: str,
+        card_alias: str = "",
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """分享名片。"""
+        return await self.t.post(
+            "/Msg/ShareCard",
+            json=ShareCardParam(
+                to_wxid=to_wxid,
+                card_wx_id=card_wx_id,
+                card_nick_name=card_nick_name,
+                card_alias=card_alias,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def share_link_message(
+        self,
+        to_wxid: str,
+        title: str,
+        desc: str,
+        url: str,
+        thumb_url: str,
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """发送分享链接消息。"""
+        return await self.t.post(
+            "/Msg/ShareLink",
+            json=SendShareLinkMsgParam(
+                to_wxid=to_wxid, title=title, desc=desc, url=url, thumb_url=thumb_url
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def share_location(
+        self,
+        to_wxid: str,
+        x: float,
+        y: float,
+        scale: float = 1.0,
+        label: str = "",
+        poiname: str = "",
+        infourl: str = "",
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """分享地理位置。"""
+        return await self.t.post(
+            "/Msg/ShareLocation",
+            json=ShareLocationParam(
+                to_wxid=to_wxid,
+                x=x,
+                y=y,
+                scale=scale,
+                label=label,
+                poiname=poiname,
+                infourl=infourl,
+            ).to_api(),
+            timeout=timeout,
+        )
+
+    async def share_video_message(
+        self, to_wxid: str, xml: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """分享视频（XML 消息体）。"""
+        return await self.t.post(
+            "/Msg/ShareVideo",
+            json=ShareVideoXmlParam(to_wxid=to_wxid, xml=xml).to_api(),
+            timeout=timeout,
+        )
+
+    async def upload_image_base64(
+        self, to_wxid: str, image_b64: str, *, timeout: Optional[float] = None
+    ) -> Any:
+        """发送图片消息（直接传 Base64，不经 URL 下载）。"""
+        return await self.t.post(
+            "/Msg/UploadImg",
+            json=SendImageMsgParam(to_wxid=to_wxid, image_b64=image_b64).to_api(),
+            timeout=timeout,
+        )
+    
 
     async def send_image_by_url(
         self,
@@ -181,9 +435,4 @@ class MsgClient:
         except Exception as e:
             raise ValueError(f"图片下载或编码失败: {str(e)}") from e
 
-        # Step 2: 调用原始发送图片接口
-        payload = SendImageMsgParam(to_wxid=to_wxid, image_b64=base64_str).to_api()
-
-        data = await self.t.post("/Msg/UploadImg", json=payload)
-        return data
-    
+        return await self.upload_image_base64(to_wxid, base64_str, timeout=float(timeout))

@@ -18,18 +18,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import Field
 
-from . import BaseModelWithConfig
+from .json_payload import ApiJsonBody
 
 
-class MsgRequestBody(BaseModelWithConfig):
-    """msg 类请求体基类：输出与 LwApi 文档一致的 JSON 键名。"""
-
-    def to_api(self) -> dict[str, Any]:
-        return self.model_dump(mode="json", by_alias=True, exclude_none=True)
+class MsgRequestBody(ApiJsonBody):
+    """msg 类请求体基类。"""
 
 
 class SendNewMsgParam(MsgRequestBody):
@@ -87,6 +84,71 @@ class SendShareLinkMsgParam(MsgRequestBody):
     desc: str = Field(..., description="链接描述")
     url: str = Field(..., description="链接 URL")
     thumb_url: str = Field(..., serialization_alias="thumbUrl", description="缩略图 URL")
+
+
+class MsgForwardXmlParam(MsgRequestBody):
+    """swagger: msg.DefaultParam，用于 CDN 转发类接口（Content 为消息 XML）。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    content: str = Field(..., description="消息 XML 内容")
+
+
+class SendEmojiParam(MsgRequestBody):
+    """swagger: msg.SendEmojiParam。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    total_len: int = Field(..., serialization_alias="totalLen", description="表情数据长度")
+    md5: str = Field(..., description="表情数据 MD5")
+
+
+class SendQuoteMsgParam(MsgRequestBody):
+    """swagger: msg.SendQuoteMsgParam。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    fromusr: str = Field(..., description="被引用人 wxid")
+    displayname: str = Field(..., description="被引用人显示名")
+    new_msg_id: str = Field(..., serialization_alias="newMsgId", description="被引用消息 newMsgId")
+    msg_content: str = Field(..., serialization_alias="msgContent", description="新消息正文")
+    quote_content: str = Field(..., serialization_alias="quoteContent", description="引用展示内容")
+    msg_seq: str = Field("0", serialization_alias="msgSeq", description="消息序列号")
+
+
+class SendVoiceMessageParam(MsgRequestBody):
+    """swagger: msg.SendVoiceMessageParam。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    voice_b64: str = Field(..., serialization_alias="base64", description="语音 Base64")
+    voice_type: int = Field(..., serialization_alias="type", description="AMR=0, MP3=2, SILK=4, SPEEX=1, WAVE=3")
+    voice_time: int = Field(..., serialization_alias="voiceTime", description="时长（毫秒，1000 为一秒）")
+    wxid: Optional[str] = Field(None, description="部分场景需要，可留空")
+
+
+class ShareCardParam(MsgRequestBody):
+    """swagger: msg.ShareCardParam。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    card_wx_id: str = Field(..., serialization_alias="cardWxId", description="名片 wxid")
+    card_nick_name: str = Field(..., serialization_alias="cardNickName", description="名片昵称")
+    card_alias: str = Field("", serialization_alias="cardAlias", description="名片别名")
+
+
+class ShareLocationParam(MsgRequestBody):
+    """swagger: msg.ShareLocationParam。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    x: float = Field(..., description="经度")
+    y: float = Field(..., description="纬度")
+    scale: float = Field(1.0, description="地图缩放比例")
+    label: str = Field("", description="位置标签")
+    poiname: str = Field("", description="位置名称")
+    infourl: str = Field("", serialization_alias="infourl", description="附加信息 URL")
+
+
+class ShareVideoXmlParam(MsgRequestBody):
+    """swagger: msg.ShareVideoMsgParam（分享视频 XML）。"""
+
+    to_wxid: str = Field(..., serialization_alias="toWxid", description="接收者 wxid")
+    xml: str = Field(..., description="视频消息 XML")
 
 
 class RevokeMsgParam(MsgRequestBody):
