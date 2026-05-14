@@ -458,7 +458,6 @@ html.theme-light .subtitle code {
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--surface-hover);
   border-color: rgba(255, 77, 109, 0.25);
 }
 
