@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -18,14 +19,34 @@ from loguru import logger
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 _LOGGER_INITIALIZED = False
+# 已为该「日志账号键」注册过文件 sink，避免同一备注重复启动时重复写入同一文件。
+_ACCOUNT_FILE_SINKS: set[str] = set()
+# Bot 协程内设置；文件 sink 的 filter 会读此变量，使 lwapi / 插件里未 bind 的 logger 也能进对应账号文件。
+log_account_ctx: ContextVar[Optional[str]] = ContextVar("log_account", default=None)
+
+ACCOUNT_LOG_EXTRA_KEY = "account"
+
+
+def effective_account_remark(acc: dict) -> str:
+    """与运维台读日志、日志文件名一致：优先备注，否则取 device_id 前 8 位。"""
+    r = (acc.get("remark") or "").strip()
+    if r:
+        return r
+    did = (acc.get("device_id") or "").strip()
+    return did[:8] if did else "bot"
 
 
 def setup_logger(name: str = "bot"):
     """
     为「逻辑名」（通常账号备注）注册按日期滚动的文件日志：logs/{name}_YYYY-MM-DD.log。
     首次调用时还会配置带颜色的控制台输出。
+
+    多账号时：文件 sink 带 filter，只写入 ``extra["account"] == name`` 或当前
+    ``log_account_ctx`` 与本账号一致的记录（lwapi 等未 bind 的日志依赖后者），避免互相混写。
     """
     global _LOGGER_INITIALIZED
+    account_key = (name or "").strip() or "bot"
+
     if not _LOGGER_INITIALIZED:
         logger.remove()
         logger.add(
@@ -35,14 +56,24 @@ def setup_logger(name: str = "bot"):
         )
         _LOGGER_INITIALIZED = True
 
-    logger.add(
-        LOG_DIR / f"{name}_{{time:YYYY-MM-DD}}.log",
-        rotation="10 MB",
-        retention="7 days",
-        level="DEBUG",
-        encoding="utf-8",
-    )
-    return logger
+    def _only_this_account(record: dict) -> bool:
+        extra = record["extra"]
+        if extra.get(ACCOUNT_LOG_EXTRA_KEY) == account_key:
+            return True
+        # 各模块普遍 ``from loguru import logger`` 未 bind；Bot 协程里已 set log_account_ctx
+        return log_account_ctx.get() == account_key
+
+    if account_key not in _ACCOUNT_FILE_SINKS:
+        _ACCOUNT_FILE_SINKS.add(account_key)
+        logger.add(
+            LOG_DIR / f"{account_key}_{{time:YYYY-MM-DD}}.log",
+            rotation="10 MB",
+            retention="7 days",
+            level="DEBUG",
+            encoding="utf-8",
+            filter=_only_this_account,
+        )
+    return logger.bind(**{ACCOUNT_LOG_EXTRA_KEY: account_key})
 
 
 def account_log_file_path(remark: str, date_str: Optional[str] = None) -> Path:

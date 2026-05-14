@@ -18,7 +18,6 @@ import os
 from typing import Dict, Optional, Set
 
 from dotenv import load_dotenv
-from loguru import logger
 
 from lwapi import LwApiClient
 
@@ -26,7 +25,7 @@ from src.account_loader import account_slot_key, save_accounts
 from src.login_service import LoginService
 from src.message_handler import default_message_handler
 from src.runtime.account_events import AccountEventHub
-from src.utils import setup_logger
+from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
 load_dotenv()
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
@@ -87,8 +86,13 @@ class BotService:
         self, acc: dict, all_accounts: list, account_idx: int
     ) -> None:
         """单账号主循环：异常后 sleep 再重连，直至任务被取消。"""
-        remark = acc.get("remark", acc["device_id"][:8])
-        bot_logger = setup_logger(remark)
+        remark = effective_account_remark(acc)
+        ctx_token = log_account_ctx.set(remark)
+        try:
+            bot_logger = setup_logger(remark)
+        except Exception:
+            log_account_ctx.reset(ctx_token)
+            raise
 
         device_id = acc["device_id"]
         saved_wxid = acc.get("wxid", "").strip()
@@ -143,7 +147,7 @@ class BotService:
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        logger.error(f"【{remark}】运行异常: {e}")
+                        bot_logger.exception(f"【{remark}】运行异常: {e}")
                         if self._events:
                             await emit(
                                 {
@@ -153,4 +157,5 @@ class BotService:
                             )
                         await asyncio.sleep(10)
         finally:
+            log_account_ctx.reset(ctx_token)
             self._login_pending.discard(account_idx)

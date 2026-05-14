@@ -18,7 +18,7 @@ from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService
-from src.utils import read_account_today_log_tail
+from src.utils import read_account_today_log_tail, effective_account_remark
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -82,7 +82,7 @@ class AdminWebApp:
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
         acc = accounts[idx]
-        remark = (acc.get("remark") or "").strip() or (acc.get("device_id") or "")[:8]
+        remark = effective_account_remark(acc)
         payload = read_account_today_log_tail(remark, lines=n)
         return web.json_response(payload)
 
