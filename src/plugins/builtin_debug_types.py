@@ -12,7 +12,7 @@ from lwapi import LwApiClient
 from lwapi.models.msg import SyncMessageResponse
 
 PLUGIN_ID = "debug_types"
-PLUGIN_TITLE = "调试消息"
+PLUGIN_TITLE = "Demo-信息摘要"
 PLUGIN_DESCRIPTION = "在日志中打印原始信息，便于根据字段编写插件"
 
 

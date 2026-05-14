@@ -15,29 +15,30 @@ from src.plugins.builtin_debug_types import (
     PLUGIN_TITLE as _DBG_TITLE,
     handle as _debug_handle,
 )
-from src.plugins.builtin_demo_replies import (
-    PLUGIN_DESCRIPTION as _DEMO_DESC,
-    PLUGIN_ID as _DEMO_ID,
-    PLUGIN_TITLE as _DEMO_TITLE,
-    handle as _demo_handle,
+
+from src.plugins.builtin_demo_helper import (
+    PLUGIN_DESCRIPTION as _TH_DESC,
+    PLUGIN_ID as _TH_ID,
+    PLUGIN_TITLE as _TH_TITLE,
+    handle as _demo_helper_handle,
 )
 from src.plugins.types import PluginSpec
 
 # 运维台列表展示顺序（与是否勾选启用无关）
 _ALL: tuple[PluginSpec, ...] = (
     PluginSpec(
-        id=_DEMO_ID,
-        title=_DEMO_TITLE,
-        description=_DEMO_DESC,
-        handle=_demo_handle,
-        version="1.0.1",
-        author="LWAPI",
-    ),
-    PluginSpec(
         id=_DBG_ID,
         title=_DBG_TITLE,
         description=_DBG_DESC,
         handle=_debug_handle,
+        version="1.0.0",
+        author="LWAPI",
+    ),
+    PluginSpec(
+        id=_TH_ID,
+        title=_TH_TITLE,
+        description=_TH_DESC,
+        handle=_demo_helper_handle,
         version="1.0.0",
         author="LWAPI",
     ),
