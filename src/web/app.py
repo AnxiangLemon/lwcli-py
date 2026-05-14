@@ -7,6 +7,7 @@ LWAPI 运维台：aiohttp 应用定义与 REST / WebSocket 路由。
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -159,11 +160,17 @@ class AdminWebApp:
         await self.account_events.register(idx, ws)
         try:
             while True:
-                msg = await ws.receive()
+                try:
+                    msg = await ws.receive()
+                except asyncio.CancelledError:
+                    # SIGINT / 优雅退出：避免 CancelledError 冒泡到 aiohttp 协议层触发 InvalidStateError
+                    break
                 if msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR, WSMsgType.CLOSED):
                     break
         finally:
             await self.account_events.unregister(idx, ws)
+            if not ws.closed:
+                await ws.close()
         return ws
 
     async def api_start_one(self, request: web.Request) -> web.Response:

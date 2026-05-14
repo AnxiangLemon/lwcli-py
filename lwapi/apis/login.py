@@ -332,6 +332,21 @@ class LoginClient:
                 except asyncio.CancelledError:
                     logger.info("心跳任务被取消")
                     raise
+                except ApiError as e:
+                    # 到 lwapi 的 HTTP 已成功；微信侧超时/离线等由后端包装为 ApiError（常见 -2001），
+                    # 与 httpx 直连异常不同，故单独按可恢复网络问题处理。
+                    if e.code == -2001 or (
+                        e.message
+                        and (
+                            "网络请求失败" in e.message
+                            or "deadline exceeded" in e.message.lower()
+                        )
+                    ):
+                        logger.warning(f"心跳：上游网络波动（将继续）: {e}")
+                    else:
+                        logger.warning(f"心跳 API 异常（将继续）: {e}")
+                    await asyncio.sleep(5)
+                    continue
                 except Exception as e:
                     logger.exception(f"心跳未知异常: {e}")
 

@@ -66,12 +66,12 @@ class MsgClient:
                     await asyncio.sleep(self.interval)
                     continue
                 logger.warning(f"消息轮询异常: {e}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(8)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"消息轮询异常: {e}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(5)
 
         logger.info("消息轮询已停止")
 
