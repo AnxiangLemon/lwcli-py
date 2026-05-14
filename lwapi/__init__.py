@@ -6,6 +6,7 @@ lwapi SDK 对外统一入口。
 from .client import LwApiClient
 from .config import ClientConfig
 from .exceptions import ApiError, HttpError, LwApiError
+from .apis.generated import GeneratedApis
 
 __all__ = [
     "LwApiClient",
@@ -13,4 +14,5 @@ __all__ = [
     "LwApiError",
     "HttpError",
     "ApiError",
+    "GeneratedApis",
 ]

@@ -33,6 +33,11 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
 
         if content in ["你好", "hi", "在吗", "在么"]:
             await client.msg.send_text_message(to_wxid=sender, content="我在的！自动回复～")
+            payload = {
+            "toWxid": sender,
+            "content": "这是通过 api.msg.msg_send_txt 发的消息～",
+           }
+            await client.api.msg.msg_send_txt(body=payload)
 
         elif "菜单" in content or "help" in content.lower():
             help_text = (
