@@ -61,8 +61,8 @@
       <div class="card">
         <h2>新增账号</h2>
         <form onsubmit="addAccount(event)" class="form-row">
-          <input type="text" id="new-device" placeholder="device_id（必填）" required />
-          <input type="text" id="new-remark" placeholder="备注（可选）" />
+          <input type="text" id="new-device" placeholder="device_id（16位）" required />
+          <input type="text" id="new-remark" placeholder="机器人备注" required/>
           <button type="submit" class="btn btn-primary">添加</button>
         </form>
       </div>
@@ -97,6 +97,50 @@
       </div>
     </section>
 
+      </div>
+    </div>
+  </div>
+
+  <div id="app-modal" class="app-modal" aria-hidden="true">
+    <div class="app-modal-backdrop" onclick="closeAppModal()" aria-hidden="true"></div>
+    <div
+      class="app-modal-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="app-modal-title"
+      onclick="event.stopPropagation()"
+    >
+      <div id="app-modal-edit" class="app-modal-stack">
+        <h2 id="app-modal-title" class="app-modal-title">编辑账号</h2>
+        <p class="app-modal-sub">修改 device_id、备注与本地 wxid。请先停止机器人再保存。</p>
+        <form id="modal-edit-form" class="modal-form" onsubmit="submitEditAccount(event)">
+          <input type="hidden" id="modal-edit-index" value="" />
+          <div class="modal-field">
+            <label for="modal-edit-device">device_id</label>
+            <input type="text" id="modal-edit-device" class="modal-input" required autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="modal-field">
+            <label for="modal-edit-remark">备注</label>
+            <input type="text" id="modal-edit-remark" class="modal-input" placeholder="列表中显示的名称" autocomplete="off" />
+          </div>
+          <div class="modal-field">
+            <label for="modal-edit-wxid">wxid（可空）</label>
+            <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="app-modal-actions">
+            <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
+            <button type="submit" class="btn btn-primary" id="modal-edit-submit">保存</button>
+          </div>
+        </form>
+      </div>
+      <div id="app-modal-confirm" class="app-modal-stack" hidden>
+        <h2 id="app-modal-confirm-title" class="app-modal-title">确认删除</h2>
+        <p class="app-modal-sub" id="app-modal-confirm-msg"></p>
+        <input type="hidden" id="modal-confirm-index" value="" />
+        <div class="app-modal-actions app-modal-actions-end">
+          <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
+          <button type="button" class="btn btn-danger" id="modal-confirm-delete-btn" onclick="submitDeleteAccount()">删除</button>
+        </div>
       </div>
     </div>
   </div>
@@ -469,40 +513,70 @@
       await refreshAccounts({ soft: false });
     }
 
-    async function editAccount(index) {
-      const data = await fetchJson('/api/accounts');
-      const acc = data.accounts[index];
-      if (!acc) return;
-      const device_id = prompt('device_id', acc.device_id);
-      if (device_id == null) return;
-      const remark = prompt('备注', acc.remark || '');
-      if (remark == null) return;
-      const wxid = prompt('wxid（可空）', acc.wxid || '');
-      if (wxid == null) return;
-      await fetchJson('/api/accounts/' + index, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          device_id: device_id.trim(),
-          remark: remark.trim(),
-          wxid: wxid.trim(),
-        }),
-      });
-      await refreshAccounts({ soft: false });
+    function closeAppModal() {
+      var root = document.getElementById('app-modal');
+      if (!root) return;
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', onAppModalKeydown);
+    }
+
+    function onAppModalKeydown(ev) {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeAppModal();
+      }
+    }
+
+    function openAppModal() {
+      var root = document.getElementById('app-modal');
+      if (!root) return;
+      root.classList.add('is-open');
+      root.setAttribute('aria-hidden', 'false');
+      document.addEventListener('keydown', onAppModalKeydown);
     }
 
     async function deleteAccount(index) {
-      if (!confirm('确定删除该账号？（需已停止）')) return;
+      var acc = _lastAccountsPayload[index];
+      var label = acc ? (acc.remark || '').trim() || (acc.device_id || '').slice(0, 12) || '账号' + index : '账号 #' + index;
+      document.getElementById('app-modal-edit').hidden = true;
+      document.getElementById('app-modal-confirm').hidden = false;
+      var panel = document.querySelector('.app-modal-panel');
+      if (panel) panel.setAttribute('aria-labelledby', 'app-modal-confirm-title');
+      document.getElementById('modal-confirm-index').value = String(index);
+      document.getElementById('app-modal-confirm-msg').textContent =
+        '确定删除「' + label + '」？需已停止运行。此操作不可撤销。';
+      openAppModal();
+      setTimeout(function () {
+        var b = document.getElementById('modal-confirm-delete-btn');
+        if (b) b.focus();
+      }, 30);
+    }
+
+    async function submitDeleteAccount() {
+      var index = parseInt(document.getElementById('modal-confirm-index').value, 10);
+      if (isNaN(index)) {
+        closeAppModal();
+        return;
+      }
+      var delBtn = document.getElementById('modal-confirm-delete-btn');
+      if (delBtn) delBtn.disabled = true;
       try {
         await fetchJson('/api/accounts/' + index, { method: 'DELETE' });
-        const ws = accountWs[index];
+        var ws = accountWs[index];
         if (ws) {
-          try { ws.close(); } catch (e) {}
+          try {
+            ws.close();
+          } catch (e) {}
           delete accountWs[index];
         }
+        closeAppModal();
         await refreshAccounts({ soft: false });
+        showToast('已删除');
       } catch (e) {
         alert(e.message);
+      } finally {
+        if (delBtn) delBtn.disabled = false;
       }
     }
 
@@ -513,6 +587,59 @@
       var s = String(v).trim();
       if (s.toLowerCase().indexOf('v') === 0) s = s.slice(1);
       return s || '1.0.0';
+    }
+
+    async function editAccount(index) {
+      var acc = _lastAccountsPayload[index];
+      if (!acc) {
+        try {
+          var data = await fetchJson('/api/accounts');
+          acc = data.accounts[index];
+        } catch (e) {
+          alert(e.message);
+          return;
+        }
+      }
+      if (!acc) return;
+      document.getElementById('app-modal-edit').hidden = false;
+      document.getElementById('app-modal-confirm').hidden = true;
+      var panel = document.querySelector('.app-modal-panel');
+      if (panel) panel.setAttribute('aria-labelledby', 'app-modal-title');
+      document.getElementById('modal-edit-index').value = String(index);
+      document.getElementById('modal-edit-device').value = acc.device_id || '';
+      document.getElementById('modal-edit-remark').value = acc.remark || '';
+      document.getElementById('modal-edit-wxid').value = acc.wxid || '';
+      openAppModal();
+      setTimeout(function () {
+        var el = document.getElementById('modal-edit-device');
+        if (el) el.focus();
+      }, 30);
+    }
+
+    async function submitEditAccount(e) {
+      e.preventDefault();
+      var index = parseInt(document.getElementById('modal-edit-index').value, 10);
+      if (isNaN(index)) return;
+      var btn = document.getElementById('modal-edit-submit');
+      var device_id = document.getElementById('modal-edit-device').value.trim();
+      var remark = document.getElementById('modal-edit-remark').value.trim();
+      var wxid = document.getElementById('modal-edit-wxid').value.trim();
+      if (!device_id) return;
+      if (btn) btn.disabled = true;
+      try {
+        await fetchJson('/api/accounts/' + index, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
+        });
+        closeAppModal();
+        await refreshAccounts({ soft: false });
+        showToast('已保存');
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     function showToast(msg) {

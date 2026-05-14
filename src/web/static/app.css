@@ -1175,3 +1175,123 @@ html.theme-light .toast {
   color: var(--success);
   flex-shrink: 0;
 }
+
+/* —— 全屏模态（编辑账号 / 确认删除） —— */
+.app-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.app-modal.is-open {
+  display: flex;
+}
+
+.app-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 4, 14, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+html.theme-light .app-modal-backdrop {
+  background: rgba(26, 26, 46, 0.45);
+}
+
+.app-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  padding: 26px 26px 22px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: app-modal-in 0.22s ease-out;
+}
+
+@keyframes app-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.app-modal-title {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.app-modal-sub {
+  margin: 0 0 22px;
+  font-size: 0.84rem;
+  color: var(--muted-dim);
+  line-height: 1.5;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-mid);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+html.theme-light .modal-input {
+  background: var(--bg);
+}
+
+.modal-input:focus {
+  border-color: rgba(162, 155, 254, 0.55);
+  box-shadow: 0 0 0 3px rgba(162, 155, 254, 0.12);
+}
+
+.app-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.app-modal-actions-end {
+  margin-top: 4px;
+}
