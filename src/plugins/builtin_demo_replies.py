@@ -33,11 +33,6 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
 
         if content in ["你好", "hi", "在吗", "在么"]:
             await client.msg.send_text_message(to_wxid=sender, content="我在的！自动回复～")
-            payload = {
-            "toWxid": sender,
-            "content": "这是通过 api.msg.msg_send_txt 发的消息～",
-           }
-            await client.api.msg.msg_send_txt(body=payload)
 
         elif "菜单" in content or "help" in content.lower():
             help_text = (
@@ -48,7 +43,6 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
         elif "pic" in content:
             # 示例图链，生产环境请换成自己的地址或从配置读取
             image_url = (
-                "http://103.40.14.118:12347/images/temp/"
-                "53587046100@chatroom-wxid_fjnkvacehloh11-1764765791.png"
+                "https://ss2.bdstatic.com/70cFvXSh_Q1YnxGkpoWK1HF6hhy/it/u=1659552792,3869332496&fm=253&gp=0.jpg"
             )
             await client.msg.send_image_by_url(sender, image_url)

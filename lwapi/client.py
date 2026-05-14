@@ -3,18 +3,16 @@ from .config import ClientConfig
 from .transport import AsyncHTTPTransport
 from .apis.login import LoginClient
 from .apis.msg import MsgClient
-from .apis.generated import GeneratedApis
 
 class LwApiClient:
-    """LwApi 异步 SDK：含 login/msg 高层封装，以及 `api` 下与 swagger 同步的全量 HTTP 封装。"""
+    """LwApi 异步 SDK：对外以领域客户端为主（login / msg），请求体用 models 中的类型拼装。"""
+
     def __init__(self, base_url: str, timeout: float = 30.0):
         """初始化 SDK 客户端。timeout 为普通接口默认超时；消息 Sync 等在各自调用处单独放宽。"""
         self.config = ClientConfig(base_url=base_url, timeout=timeout)
         self.transport = AsyncHTTPTransport(config=self.config)
         self.login = LoginClient(self.transport)
         self.msg = MsgClient(self.transport)
-        # 与 swagger.json 同步的全量薄封装（按标签分组）；含中文文档字符串。
-        self.api = GeneratedApis(self.transport)
         # 反向注入 client，便于消息回调里拿到完整 SDK 能力。
         self.msg.client = self
         # 用于控制整个客户端生命周期，防止重复关闭。

@@ -17,6 +17,7 @@ from typing import Callable, Awaitable, Optional
 from ..exceptions import HttpError, is_wrapped_request_timeout
 from ..transport import AsyncHTTPTransport
 from ..models.msg import SyncMessageResponse
+from ..models.msg_requests import SendImageMsgParam, SendNewMsgParam
 
 MessageHandler = Callable[["LwApiClient", SyncMessageResponse], Awaitable[None]]
 
@@ -66,12 +67,12 @@ class MsgClient:
                     await asyncio.sleep(self.interval)
                     continue
                 logger.warning(f"消息轮询异常: {e}")
-                await asyncio.sleep(8)
+                await asyncio.sleep(2)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"消息轮询异常: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(2)
 
         logger.info("消息轮询已停止")
 
@@ -114,7 +115,10 @@ class MsgClient:
         at: Optional[str] = None,
     ) -> dict:
         """
-        发送文本消息（支持单聊、群聊、@成员）
+        发送文本消息（支持单聊、群聊、@成员）。
+
+        内部使用 :class:`~lwapi.models.msg_requests.SendNewMsgParam` 生成 JSON，避免手写 dict 键名错误。
+        需要「已构造好的请求体」时可用 :meth:`send_text_body`。
 
         Args:
             to_wxid: 接收者 wxid（个人）或群ID（群聊，如 xxx@chatroom）
@@ -125,19 +129,18 @@ class MsgClient:
         Returns:
             dict: 原始返回结果，包含 code, data, message
         """
-        payload = {
-            "toWxid": to_wxid,
-            "content": content,
-        }
-        # 仅在 at 非空字符串时传入，避免把空串发给服务端。
-        if at and at.strip():
-            payload["at"] = at.strip()
+        at_clean = at.strip() if at and at.strip() else None
+        payload = SendNewMsgParam(
+            to_wxid=to_wxid,
+            content=content,
+            at=at_clean,
+        ).to_api()
 
         data = await self.t.post("/Msg/SendTxt", json=payload)
-        
+
         # 统一返回原始结构，便于你判断成功失败
         return data
-    
+
 
     async def send_image_by_url(
         self,
@@ -179,10 +182,7 @@ class MsgClient:
             raise ValueError(f"图片下载或编码失败: {str(e)}") from e
 
         # Step 2: 调用原始发送图片接口
-        payload = {
-            "toWxid": to_wxid,
-            "base64": base64_str
-        }
+        payload = SendImageMsgParam(to_wxid=to_wxid, image_b64=base64_str).to_api()
 
         data = await self.t.post("/Msg/UploadImg", json=payload)
         return data

@@ -4,12 +4,10 @@
 
 from .login import LoginClient, LoginError, QRStatus
 from .msg import MsgClient
-from .generated import GeneratedApis
 
 __all__ = [
     "LoginClient",
     "LoginError",
     "QRStatus",
     "MsgClient",
-    "GeneratedApis",
 ]

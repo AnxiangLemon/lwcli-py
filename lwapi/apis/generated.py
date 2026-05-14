@@ -4,7 +4,8 @@
 重新生成: python scripts/generate_lwapi_from_swagger.py
 
 本模块为「薄封装」：统一走 AsyncHTTPTransport.post，已自动附带 X-Wxid 请求头（请先 LwApiClient.set_wxid）。
-登录二维码轮询、消息长轮询等业务逻辑请优先使用 apis.login.LoginClient 与 apis.msg.MsgClient。
+默认不挂载到 LwApiClient；业务代码请用 apis.login.LoginClient、apis.msg.MsgClient 等。
+若尚未提供领域封装，可 ``from lwapi.apis.generated import GeneratedApis`` 并传入 ``transport`` 使用。
 """
 
 from __future__ import annotations
@@ -1761,7 +1762,12 @@ class WxAppApi:
 class GeneratedApis:
     """
     聚合 swagger 中全部 POST 接口；按业务标签分子客户端。
-    用法: await client.api.friend.friend_search(body={...})
+
+    不挂在 LwApiClient 上，避免与 login/msg 等领域客户端重复。
+    用法示例::
+
+        rest = GeneratedApis(client.transport)
+        await rest.friend.friend_search(body={...})
     """
 
     def __init__(self, transport: AsyncHTTPTransport) -> None:
