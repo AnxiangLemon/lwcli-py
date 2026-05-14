@@ -200,7 +200,13 @@ class AdminWebApp:
         return web.json_response(
             {
                 "plugins": [
-                    {"id": p.id, "title": p.title, "description": p.description}
+                    {
+                        "id": p.id,
+                        "title": p.title,
+                        "description": p.description,
+                        "version": p.version,
+                        "author": p.author,
+                    }
                     for p in specs
                 ],
                 "enabled": load_enabled_ids(),

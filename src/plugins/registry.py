@@ -30,12 +30,16 @@ _ALL: tuple[PluginSpec, ...] = (
         title=_DEMO_TITLE,
         description=_DEMO_DESC,
         handle=_demo_handle,
+        version="1.0.1",
+        author="LWAPI",
     ),
     PluginSpec(
         id=_DBG_ID,
         title=_DBG_TITLE,
         description=_DBG_DESC,
         handle=_debug_handle,
+        version="1.0.0",
+        author="LWAPI",
     ),
 )
 

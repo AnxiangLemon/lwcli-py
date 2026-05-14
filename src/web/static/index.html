@@ -4,30 +4,61 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LWAPI 运维台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>LWAPI 运维台</h1>
-      <p class="subtitle">
-        有问题可以联系作者 Telegram：<a href="https://t.me/Xnasl24" target="_blank" rel="noopener" style="color:var(--accent)">https://t.me/Xnasl24</a>
-      </p>
-    </header>
+  <div class="app-shell">
+    <div class="sidebar-backdrop" onclick="toggleSidebar(false)" aria-hidden="true"></div>
+    <aside class="sidebar" aria-label="侧栏导航">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-bar" aria-hidden="true"></span>
+        <div class="sidebar-brand-text">
+          <span class="sidebar-brand-name">LWAPI</span>
+          <span class="sidebar-brand-sub">运维台</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav" aria-label="主导航">
+        <button type="button" class="nav-link is-active" data-nav="accounts" onclick="showView('accounts')">
+          <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          账号列表
+        </button>
+        <button type="button" class="nav-link" data-nav="logs" onclick="showView('logs')">
+          <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>
+          日志
+        </button>
+        <button type="button" class="nav-link" data-nav="plugins" onclick="showView('plugins')">
+          <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          插件管理
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button type="button" class="sidebar-btn" onclick="toggleTheme()" title="切换浅色 / 深色">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          切换主题
+        </button>
+        <a class="sidebar-link" href="https://t.me/Xnasl24" target="_blank" rel="noopener">联系作者 · Telegram</a>
+      </div>
+    </aside>
 
-    <nav class="top-nav" aria-label="主导航">
-      <button type="button" class="nav-link is-active" data-nav="accounts" onclick="showView('accounts')">账号列表</button>
-      <button type="button" class="nav-link" data-nav="logs" onclick="showView('logs')">日志</button>
-      <button type="button" class="nav-link" data-nav="plugins" onclick="showView('plugins')">插件管理</button>
-    </nav>
+    <div class="main-area">
+      <header class="main-topbar">
+        <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" aria-label="打开菜单">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <h1 class="main-title" id="main-title">账号列表</h1>
+      </header>
+      <div class="main-body">
 
-    <section id="view-accounts" class="view-panel is-active" aria-labelledby="nav-accounts">
+    <section id="view-accounts" class="view-panel is-active" aria-labelledby="main-title">
       <div class="toolbar">
         <button type="button" class="btn" id="btn-refresh" onclick="refreshAccounts({ soft: true })">刷新列表</button>
         <button type="button" class="btn btn-primary" id="btn-start-all" onclick="startAll()">启动全部机器人</button>
       </div>
 
-      <div class="card" style="margin-bottom: 20px;">
+      <div class="card">
         <h2>新增账号</h2>
         <form onsubmit="addAccount(event)" class="form-row">
           <input type="text" id="new-device" placeholder="device_id（必填）" required />
@@ -60,22 +91,50 @@
       <div class="card">
         <h2>消息插件</h2>
         <p class="subtitle" style="margin-top:0;margin-bottom:14px">
-          勾选后保存即写入 <code>config/plugins.json</code>；已运行的机器人会在<strong>下一轮消息批次</strong>起生效（无需重启进程）。
+          勾选后保存；已运行的机器人会在<strong>下一轮消息批次</strong>起生效（无需重启进程）。
         </p>
-        <p class="subtitle" style="margin-top:0;margin-bottom:14px;color:var(--muted)">
-          执行顺序为下列从上到下的顺序（与勾选先后无关）。
+        <p class="subtitle" style="margin-top:0;margin-bottom:14px;color:var(--muted-dim)">
+          执行顺序为下列从前到后的顺序（与勾选先后无关）。
         </p>
         <div id="plugins-list" class="plugin-list">加载中…</div>
-        <div class="plugin-actions">
-          <button type="button" class="btn btn-primary" onclick="savePlugins()">保存启用列表</button>
-          <span id="plugins-save-hint" class="plugins-hint" aria-live="polite"></span>
-        </div>
       </div>
     </section>
+
+      </div>
+    </div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-hidden="true"></div>
 
   <script>
     const accountWs = {};
+
+    const VIEW_TITLES = { accounts: '账号列表', logs: '日志', plugins: '插件管理' };
+
+    function setMainTitle(name) {
+      const el = document.getElementById('main-title');
+      if (el) el.textContent = VIEW_TITLES[name] || '';
+    }
+
+    function toggleSidebar(force) {
+      if (force === false) document.body.classList.remove('sidebar-open');
+      else if (force === true) document.body.classList.add('sidebar-open');
+      else document.body.classList.toggle('sidebar-open');
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle('theme-light');
+      try {
+        localStorage.setItem('lwapi-theme', document.documentElement.classList.contains('theme-light') ? 'light' : 'dark');
+      } catch (e) {}
+    }
+
+    (function initTheme() {
+      try {
+        var t = localStorage.getItem('lwapi-theme');
+        if (t === 'light') document.documentElement.classList.add('theme-light');
+      } catch (e) {}
+    })();
 
     function showView(name) {
       document.querySelectorAll('.view-panel').forEach((p) => p.classList.remove('is-active'));
@@ -84,6 +143,8 @@
       document.querySelectorAll('.nav-link').forEach((b) => b.classList.remove('is-active'));
       const nav = document.querySelector('.nav-link[data-nav="' + name + '"]');
       if (nav) nav.classList.add('is-active');
+      setMainTitle(name);
+      document.body.classList.remove('sidebar-open');
       if (name === 'logs') populateLogAccountSelectFromCache();
       if (name === 'plugins') loadPluginsPanel();
     }
@@ -450,58 +511,126 @@
 
     let _pluginCatalog = [];
 
+    function fmtPluginVersion(v) {
+      if (v == null || v === '') return '1.0.0';
+      var s = String(v).trim();
+      if (s.toLowerCase().indexOf('v') === 0) s = s.slice(1);
+      return s || '1.0.0';
+    }
+
+    function showToast(msg) {
+      var el = document.getElementById('toast');
+      if (!el) return;
+      el.innerHTML =
+        '<span class="toast-icon" aria-hidden="true"><svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg></span>' +
+        '<span class="toast-msg"></span>';
+      var span = el.querySelector('.toast-msg');
+      if (span) span.textContent = msg;
+      el.classList.add('is-visible');
+      el.setAttribute('aria-hidden', 'false');
+      clearTimeout(window._lwapiToastTimer);
+      window._lwapiToastTimer = setTimeout(function () {
+        el.classList.remove('is-visible');
+        el.setAttribute('aria-hidden', 'true');
+      }, 2400);
+    }
+
+    function pluginSettingsNoop() {
+      showToast('该插件暂无可视化配置');
+    }
+
+    function buildPluginCardHtml(p, on) {
+      var author = (p.author && String(p.author).trim()) || 'LWAPI';
+      var vs = fmtPluginVersion(p.version);
+      var pid = esc(p.id);
+      var gear =
+        '<button type="button" class="plugin-icon-btn" title="暂无独立配置界面" aria-label="设置" onclick="pluginSettingsNoop()">' +
+        '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>';
+      var trash =
+        '<button type="button" class="plugin-icon-btn" disabled title="内置插件不可删除" aria-label="删除">' +
+        '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6"/></svg></button>';
+      return (
+        '<article class="plugin-card' + (on ? ' is-enabled' : '') + '" data-plugin-id="' + pid + '">' +
+        '<div class="plugin-card-top">' +
+        '<div class="plugin-card-icon" aria-hidden="true"></div>' +
+        '<div class="plugin-card-head-text">' +
+        '<h3 class="plugin-card-title">' + esc(p.title) + '</h3>' +
+        '<p class="plugin-card-author">by ' + esc(author) + '</p></div>' +
+        '<span class="plugin-card-status ' + (on ? 'is-on' : 'is-off') + '">' + (on ? '运行中' : '未运行') + '</span>' +
+        '</div>' +
+        '<p class="plugin-card-desc">' + esc(p.description || '') + '</p>' +
+        '<div class="plugin-card-bottom">' +
+        '<span class="plugin-card-ver">v' + esc(vs) + '</span>' +
+        '<div class="plugin-card-toggle-row">' +
+        '<label class="plugin-toggle">' +
+        '<input type="checkbox" class="plugin-enable" data-plugin-id="' + pid + '"' + (on ? ' checked' : '') + ' onchange="onPluginToggle(event)" />' +
+        '<span class="plugin-toggle-ui"></span>' +
+        '<span class="plugin-toggle-label">' + (on ? '已启用' : '未启用') + '</span>' +
+        '</label></div>' +
+        '<div class="plugin-card-actions">' + gear + trash + '</div>' +
+        '</div></article>'
+      );
+    }
+
+    async function persistPlugins() {
+      var ordered = [];
+      _pluginCatalog.forEach(function (p) {
+        var card = document.querySelector('.plugin-card[data-plugin-id="' + p.id + '"]');
+        if (!card) return;
+        var cb = card.querySelector('input.plugin-enable');
+        if (cb && cb.checked) ordered.push(p.id);
+      });
+      await fetchJson('/api/plugins', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: ordered }),
+      });
+    }
+
+    async function onPluginToggle(ev) {
+      var input = ev.target;
+      if (!input || !input.classList.contains('plugin-enable')) return;
+      var revertTo = !input.checked;
+      try {
+        await persistPlugins();
+        var on = input.checked;
+        var card = input.closest('.plugin-card');
+        if (card) {
+          card.classList.toggle('is-enabled', on);
+          var st = card.querySelector('.plugin-card-status');
+          var lab = card.querySelector('.plugin-toggle-label');
+          if (st) {
+            st.textContent = on ? '运行中' : '未运行';
+            st.className = 'plugin-card-status ' + (on ? 'is-on' : 'is-off');
+          }
+          if (lab) lab.textContent = on ? '已启用' : '未启用';
+        }
+        showToast(on ? '启用成功' : '已禁用');
+      } catch (e) {
+        alert(e.message);
+        input.checked = revertTo;
+      }
+    }
+
     async function loadPluginsPanel() {
-      const host = document.getElementById('plugins-list');
-      const hint = document.getElementById('plugins-save-hint');
-      if (hint) hint.textContent = '';
+      var host = document.getElementById('plugins-list');
       if (!host) return;
       host.textContent = '加载中…';
       try {
-        const data = await fetchJson('/api/plugins');
+        var data = await fetchJson('/api/plugins');
         _pluginCatalog = data.plugins || [];
-        const enabled = new Set(data.enabled || []);
+        var enabled = new Set(data.enabled || []);
         if (!_pluginCatalog.length) {
           host.textContent = '暂无已注册插件。';
           return;
         }
         host.innerHTML = _pluginCatalog
           .map(function (p) {
-            const on = enabled.has(p.id);
-            return (
-              '<label class="plugin-row" data-plugin-id="' + esc(p.id) + '">' +
-              '<input type="checkbox" data-plugin-id="' + esc(p.id) + '"' + (on ? ' checked' : '') + ' />' +
-              '<span class="plugin-body">' +
-              '<span class="plugin-title">' + esc(p.title) + '</span>' +
-              '<code class="plugin-id">' + esc(p.id) + '</code>' +
-              '<span class="plugin-desc">' + esc(p.description || '') + '</span>' +
-              '</span></label>'
-            );
+            return buildPluginCardHtml(p, enabled.has(p.id));
           })
           .join('');
       } catch (e) {
         host.textContent = e.message || String(e);
-      }
-    }
-
-    async function savePlugins() {
-      const hint = document.getElementById('plugins-save-hint');
-      const ordered = [];
-      _pluginCatalog.forEach(function (p) {
-        const row = document.querySelector('.plugin-row[data-plugin-id="' + p.id + '"]');
-        if (!row) return;
-        const cb = row.querySelector('input[type="checkbox"]');
-        if (cb && cb.checked) ordered.push(p.id);
-      });
-      try {
-        await fetchJson('/api/plugins', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: ordered }),
-        });
-        if (hint) hint.textContent = '已保存（' + ordered.length + ' 个启用）';
-      } catch (e) {
-        alert(e.message);
-        if (hint) hint.textContent = '';
       }
     }
 

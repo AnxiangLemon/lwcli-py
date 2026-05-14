@@ -18,3 +18,5 @@ class PluginSpec:
     title: str
     description: str
     handle: MessageHandler
+    version: str = "1.0.0"
+    author: str = ""
