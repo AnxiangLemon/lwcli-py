@@ -30,7 +30,6 @@ class AdminWebApp:
     def __init__(self) -> None:
         self.account_events = AccountEventHub()
         self.bot_service = BotService(account_events=self.account_events)
-        setup_logger("web")
 
     def build(self) -> web.Application:
         app = web.Application()

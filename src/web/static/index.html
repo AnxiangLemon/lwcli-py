@@ -90,11 +90,8 @@
     <section id="view-plugins" class="view-panel" aria-label="插件管理">
       <div class="card">
         <h2>消息插件</h2>
-        <p class="subtitle" style="margin-top:0;margin-bottom:14px">
-          勾选后保存；已运行的机器人会在<strong>下一轮消息批次</strong>起生效（无需重启进程）。
-        </p>
         <p class="subtitle" style="margin-top:0;margin-bottom:14px;color:var(--muted-dim)">
-          执行顺序为下列从前到后的顺序（与勾选先后无关）。
+          执行顺序为下列从上到下的顺序（与勾选先后无关）。
         </p>
         <div id="plugins-list" class="plugin-list">加载中…</div>
       </div>
@@ -535,27 +532,17 @@
       }, 2400);
     }
 
-    function pluginSettingsNoop() {
-      showToast('该插件暂无可视化配置');
-    }
-
     function buildPluginCardHtml(p, on) {
       var author = (p.author && String(p.author).trim()) || 'LWAPI';
       var vs = fmtPluginVersion(p.version);
       var pid = esc(p.id);
-      var gear =
-        '<button type="button" class="plugin-icon-btn" title="暂无独立配置界面" aria-label="设置" onclick="pluginSettingsNoop()">' +
-        '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>';
-      var trash =
-        '<button type="button" class="plugin-icon-btn" disabled title="内置插件不可删除" aria-label="删除">' +
-        '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6"/></svg></button>';
       return (
         '<article class="plugin-card' + (on ? ' is-enabled' : '') + '" data-plugin-id="' + pid + '">' +
         '<div class="plugin-card-top">' +
         '<div class="plugin-card-icon" aria-hidden="true"></div>' +
         '<div class="plugin-card-head-text">' +
         '<h3 class="plugin-card-title">' + esc(p.title) + '</h3>' +
-        '<p class="plugin-card-author">by ' + esc(author) + '</p></div>' +
+        '<p class="plugin-card-author"><code class="plugin-card-plugin-id">' + pid + '</code><span class="plugin-card-by"> · by ' + esc(author) + '</span></p></div>' +
         '<span class="plugin-card-status ' + (on ? 'is-on' : 'is-off') + '">' + (on ? '运行中' : '未运行') + '</span>' +
         '</div>' +
         '<p class="plugin-card-desc">' + esc(p.description || '') + '</p>' +
@@ -567,7 +554,6 @@
         '<span class="plugin-toggle-ui"></span>' +
         '<span class="plugin-toggle-label">' + (on ? '已启用' : '未启用') + '</span>' +
         '</label></div>' +
-        '<div class="plugin-card-actions">' + gear + trash + '</div>' +
         '</div></article>'
       );
     }
