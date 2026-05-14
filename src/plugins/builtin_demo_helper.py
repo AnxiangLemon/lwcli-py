@@ -45,6 +45,8 @@ PLUGIN_TITLE = "Demo-自动回复"
 PLUGIN_DESCRIPTION = (
     "私聊：帮助 / 时间 / ping；群聊：#命令 或 @机器人 + 命令。"
 )
+PLUGIN_VERSION = "1.0.0"
+PLUGIN_AUTHOR = "LWAPI"
 
 # 默认使用中国时区展示「时间」；若部署在海外可改为 UTC 或从配置读取。
 _TZ = ZoneInfo("Asia/Shanghai")

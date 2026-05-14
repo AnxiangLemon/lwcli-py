@@ -1,7 +1,7 @@
 """
 内置消息插件注册表：聚合各 builtin_* 模块的元数据与处理函数。
 
-新增插件时：编写新模块（PLUGIN_ID / TITLE / DESCRIPTION / handle），再在本文件
+新增插件时：编写新模块（PLUGIN_ID / TITLE / DESCRIPTION / VERSION / AUTHOR / handle），再在本文件
 的 _ALL 元组中追加 PluginSpec；运维台会通过 GET /api/plugins 发现新条目。
 """
 
@@ -10,38 +10,43 @@ from __future__ import annotations
 from typing import Dict, List
 
 from src.plugins.builtin_debug_types import (
+    PLUGIN_AUTHOR as _DBG_AUTHOR,
     PLUGIN_DESCRIPTION as _DBG_DESC,
     PLUGIN_ID as _DBG_ID,
     PLUGIN_TITLE as _DBG_TITLE,
+    PLUGIN_VERSION as _DBG_VER,
     handle as _debug_handle,
 )
-
 from src.plugins.builtin_demo_helper import (
-    PLUGIN_DESCRIPTION as _TH_DESC,
-    PLUGIN_ID as _TH_ID,
-    PLUGIN_TITLE as _TH_TITLE,
-    handle as _demo_helper_handle,
+    PLUGIN_AUTHOR as _DEMO_AUTHOR,
+    PLUGIN_DESCRIPTION as _DEMO_DESC,
+    PLUGIN_ID as _DEMO_ID,
+    PLUGIN_TITLE as _DEMO_TITLE,
+    PLUGIN_VERSION as _DEMO_VER,
+    handle as _demo_handle,
 )
+
 from src.plugins.types import PluginSpec
 
 # 运维台列表展示顺序（与是否勾选启用无关）
 _ALL: tuple[PluginSpec, ...] = (
     PluginSpec(
+        id=_DEMO_ID,
+        title=_DEMO_TITLE,
+        description=_DEMO_DESC,
+        handle=_demo_handle,
+        version=_DEMO_VER,
+        author=_DEMO_AUTHOR,
+    ),
+    PluginSpec(
         id=_DBG_ID,
         title=_DBG_TITLE,
         description=_DBG_DESC,
         handle=_debug_handle,
-        version="1.0.0",
-        author="LWAPI",
+        version=_DBG_VER,
+        author=_DBG_AUTHOR,
     ),
-    PluginSpec(
-        id=_TH_ID,
-        title=_TH_TITLE,
-        description=_TH_DESC,
-        handle=_demo_helper_handle,
-        version="1.0.0",
-        author="LWAPI",
-    ),
+ 
 )
 
 REGISTRY: Dict[str, PluginSpec] = {p.id: p for p in _ALL}

@@ -95,6 +95,9 @@ from lwapi.models.msg import SyncMessageResponse
 PLUGIN_ID = "my_hello"
 PLUGIN_TITLE = "示例：你好世界"
 PLUGIN_DESCRIPTION = "收到私聊文本「测试」时回复一句确认。"
+PLUGIN_VERSION = "1.0.0"
+PLUGIN_AUTHOR = "LWAPI"
+
 
 
 async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
