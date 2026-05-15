@@ -3,6 +3,8 @@ venv/
 tests/
 
 scripts/
+config/
+
 
 *.pyc
 
@@ -10,6 +12,7 @@ scripts/
 *.log
 .env
 accounts.json
+plugins.json
 
 bot.py
 getcode.py
