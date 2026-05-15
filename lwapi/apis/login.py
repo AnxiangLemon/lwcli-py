@@ -501,27 +501,3 @@ class LoginClient:
         except (ApiError, HttpError) as e:
             logger.error(f"环境上报失败: {e}")
             return False
-
-    async def long_link_create(self) -> bool:
-        try:
-            await self.t.post("/Login/LongLinkCreate")
-            logger.success("长连接创建成功")
-            return True
-        except (ApiError, HttpError) as e:
-            logger.error(f"长连接创建失败: {e}")
-            return False
-
-    async def long_link_remove(self) -> bool:
-        await self.join_background_tasks()
-        try:
-            await self.t.post("/Login/LongRemove")
-            logger.success("长连接已断开")
-            return True
-        except (ApiError, HttpError) as e:
-            logger.error(f"断开长连接失败: {e}")
-            return False
-
-    async def long_link_query(self) -> Dict[str, Any]:
-        data = await self.t.post("/Login/LongQuery")
-        logger.info("长连接状态查询成功")
-        return data
