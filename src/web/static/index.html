@@ -63,6 +63,10 @@
         <form onsubmit="addAccount(event)" class="form-row">
           <input type="text" id="new-device" placeholder="device_id（16位）" required />
           <input type="text" id="new-remark" placeholder="机器人备注" required/>
+          <select id="new-sync-mode" class="log-select" aria-label="消息同步方式" title="消息同步方式">
+            <option value="poll">HTTP 长轮询</option>
+            <option value="websocket">WebSocket 实时</option>
+          </select>
           <button type="submit" class="btn btn-primary">添加</button>
         </form>
       </div>
@@ -126,6 +130,14 @@
           <div class="modal-field">
             <label for="modal-edit-wxid">wxid（可空）</label>
             <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="modal-field">
+            <label for="modal-edit-sync-mode">消息同步</label>
+            <select id="modal-edit-sync-mode" class="modal-input">
+              <option value="poll">HTTP 长轮询</option>
+              <option value="websocket">WebSocket 实时</option>
+            </select>
+            <p class="subtitle" style="margin:6px 0 0;font-size:12px">WebSocket 模式每个 wxid 独立连接，需先登录获得 wxid。</p>
           </div>
           <div class="app-modal-actions">
             <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
@@ -306,6 +318,10 @@
       return '<span class="badge badge-off">未运行</span>';
     }
 
+    function syncModeLabel(mode) {
+      return mode === 'websocket' ? 'WebSocket' : 'HTTP 长轮询';
+    }
+
     function updateStartAllButton(accounts) {
       const btnAll = document.getElementById('btn-start-all');
       if (!btnAll) return;
@@ -327,8 +343,10 @@
         if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
         const d = card.querySelector('.acc-device');
         const w = card.querySelector('.acc-wxid');
+        const s = card.querySelector('.acc-sync-mode');
         if (d) d.textContent = acc.device_id;
         if (w) w.textContent = acc.wxid || '—';
+        if (s) s.textContent = syncModeLabel(acc.sync_mode || 'poll');
 
         const running = acc.running;
         const pending = acc.pending_login;
@@ -363,6 +381,7 @@
         '<dl class="acc-meta-list">' +
         '<div class="acc-meta-row"><dt>device</dt><dd class="acc-device">' + esc(acc.device_id) + '</dd></div>' +
         '<div class="acc-meta-row"><dt>wxid</dt><dd class="acc-wxid">' + esc(acc.wxid || '—') + '</dd></div>' +
+        '<div class="acc-meta-row"><dt>同步</dt><dd class="acc-sync-mode">' + esc(syncModeLabel(acc.sync_mode || 'poll')) + '</dd></div>' +
         '</dl>' +
         '<div class="actions acc-actions">' +
         '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
@@ -502,14 +521,16 @@
       e.preventDefault();
       const device_id = document.getElementById('new-device').value.trim();
       const remark = document.getElementById('new-remark').value.trim();
+      const sync_mode = document.getElementById('new-sync-mode').value;
       if (!device_id) return;
       await fetchJson('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id, remark }),
+        body: JSON.stringify({ device_id, remark, sync_mode }),
       });
       document.getElementById('new-device').value = '';
       document.getElementById('new-remark').value = '';
+      document.getElementById('new-sync-mode').value = 'poll';
       await refreshAccounts({ soft: false });
     }
 
@@ -609,6 +630,8 @@
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
       document.getElementById('modal-edit-wxid').value = acc.wxid || '';
+      document.getElementById('modal-edit-sync-mode').value =
+        acc.sync_mode === 'websocket' ? 'websocket' : 'poll';
       openAppModal();
       setTimeout(function () {
         var el = document.getElementById('modal-edit-device');
@@ -624,13 +647,19 @@
       var device_id = document.getElementById('modal-edit-device').value.trim();
       var remark = document.getElementById('modal-edit-remark').value.trim();
       var wxid = document.getElementById('modal-edit-wxid').value.trim();
+      var sync_mode = document.getElementById('modal-edit-sync-mode').value;
       if (!device_id) return;
       if (btn) btn.disabled = true;
       try {
         await fetchJson('/api/accounts/' + index, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
+          body: JSON.stringify({
+            device_id: device_id,
+            remark: remark,
+            wxid: wxid,
+            sync_mode: sync_mode,
+          }),
         });
         closeAppModal();
         await refreshAccounts({ soft: false });

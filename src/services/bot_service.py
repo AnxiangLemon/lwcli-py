@@ -4,10 +4,10 @@
 职责概要：
 - 使用 account_slot_key 作为任务字典键（备注+device_id），避免 device_id 重复时冲突；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
-- 登录成功后启动心跳、LoginClient 内缓存刷新任务（默认每 4h SecAutoAuth、每 24h Reportclientcheck）、
+- 登录成功后启动心跳、LoginClient 内在线维持任务（默认每 4h SecAutoAuth、每 24h Reportclientcheck）、
   以及登录后立即一次环境上报；消息处理委托给 message_handler.default_message_handler。
 - 任务取消或 `LwApiClient` 退出时：`aclose` 会依次停止消息轮询并 `join_background_tasks`，
-  使心跳与缓存刷新协程完全结束后再关闭连接。
+  使心跳与在线维持协程完全结束后再关闭连接。
 
 注意：若构造本类时不传入 account_events，则二维码登录无法推送界面（emit 为空会失败），
 正常 Web 入口应始终注入 EventHub。
@@ -22,6 +22,7 @@ from typing import Dict, Optional, Set
 from dotenv import load_dotenv
 
 from lwapi import LwApiClient
+from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
 from src.account_loader import account_slot_key, save_accounts
 from src.login_service import LoginService
@@ -31,6 +32,18 @@ from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
 load_dotenv()
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
+DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
+    os.getenv("LWAPI_MSG_SYNC_MODE"),
+    default="websocket",
+)
+
+
+def resolve_msg_sync_mode(account: dict) -> SyncMode:
+    """账号级 sync_mode 优先，否则使用环境变量 LWAPI_MSG_SYNC_MODE。"""
+    raw = account.get("sync_mode")
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_MSG_SYNC_MODE
+    return normalize_sync_mode(str(raw), default=DEFAULT_MSG_SYNC_MODE)
 
 
 def _env_int(name: str, default: int, minimum: int) -> int:
@@ -163,14 +176,27 @@ class BotService:
                             bot_logger.warning(
                                 f"【{remark}】Reportclientcheck 未成功，将继续运行"
                             )
-                        client.msg.start(handler=default_message_handler)
-                        bot_logger.success(f"【{remark}】机器人已上线，wxid={wxid}")
+                        sync_mode = resolve_msg_sync_mode(acc)
+                        client.msg.start(
+                            handler=default_message_handler,
+                            mode=sync_mode,
+                            wxid=wxid,
+                        )
+                        sync_label = (
+                            "WebSocket"
+                            if sync_mode == "websocket"
+                            else "HTTP 长轮询"
+                        )
+                        bot_logger.success(
+                            f"【{remark}】机器人已上线，wxid={wxid}，消息同步={sync_label}"
+                        )
                         if self._events:
                             await emit(
                                 {
                                     "event": "bot_online",
                                     "wxid": wxid,
-                                    "message": "消息监听已启动",
+                                    "sync_mode": sync_mode,
+                                    "message": f"消息监听已启动（{sync_label}）",
                                 }
                             )
 

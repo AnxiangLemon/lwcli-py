@@ -10,12 +10,15 @@ import aiohttp
 import base64
 import asyncio
 import httpx
+import json
 from loguru import logger
 from typing import Callable, Awaitable, Optional, Any
 
 # 导入根客户端类型（前向声明也可以，但这里直接导入更清晰）
 from ..exceptions import HttpError, is_wrapped_request_timeout
+from ..sync_utils import SyncMode, build_msg_ws_url, normalize_sync_mode
 from ..transport import AsyncHTTPTransport
+from ..models.base import ApiResponse
 from ..models.msg import SyncMessageResponse
 from ..models.msg_requests import (
     MsgForwardXmlParam,
@@ -47,6 +50,8 @@ class MsgClient:
         self._stop_event = asyncio.Event()
         self._handler: Optional[MessageHandler] = None
         self.interval = 1.0  # 轮询间隔（秒）
+        self._sync_mode: SyncMode = "websocket"
+        self._ws_session: Optional[aiohttp.ClientSession] = None
 
     async def _sync_once(self) -> SyncMessageResponse:
         """单次同步消息（服务端长轮询，超时需明显长于普通接口）。"""
@@ -97,36 +102,164 @@ class MsgClient:
 
         logger.info("消息轮询已停止")
 
+    def _parse_sync_payload(self, raw: str | bytes | dict) -> Optional[SyncMessageResponse]:
+        """解析 WebSocket 推送的同步消息体（兼容裸 data 与 ApiResponse 包装）。"""
+        if isinstance(raw, (str, bytes)):
+            try:
+                payload = json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.warning(f"WebSocket 消息非 JSON: {e}")
+                return None
+        elif isinstance(raw, dict):
+            payload = raw
+        else:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        try:
+            if "addMsgs" in payload or "modContacts" in payload:
+                return SyncMessageResponse.model_validate(payload)
+            if payload.get("code") == 200 and isinstance(payload.get("data"), dict):
+                return SyncMessageResponse.model_validate(payload["data"])
+            api_resp = ApiResponse[SyncMessageResponse].model_validate(payload)
+            if api_resp.data is not None:
+                return api_resp.data
+        except Exception as e:
+            logger.warning(f"WebSocket 同步消息解析失败: {e}")
+        return None
+
+    async def _dispatch_sync(self, resp: SyncMessageResponse) -> None:
+        if not resp.addMsgs:
+            return
+        if self._handler and self.client:
+            try:
+                await self._handler(self.client, resp)
+            except Exception:
+                logger.exception("消息处理函数异常")
+        elif not self.client:
+            logger.error("MsgClient.client 未注入！无法调用消息处理器")
+
+    async def _ws_loop(self, wxid: str) -> None:
+        """按 wxid 维持独立 WebSocket 长连接接收同步消息。"""
+        base_url = self.t._config.base_url
+        ws_url = build_msg_ws_url(base_url, wxid)
+        logger.success(f"微信消息 WebSocket 已启动: {ws_url}")
+
+        reconnect_delay = 2.0
+        while not self._stop_event.is_set():
+            session: Optional[aiohttp.ClientSession] = None
+            try:
+                session = aiohttp.ClientSession()
+                self._ws_session = session
+                async with session.ws_connect(
+                    ws_url,
+                    heartbeat=30,
+                    receive_timeout=None,
+                ) as ws:
+                    reconnect_delay = 2.0
+                    async for msg in ws:
+                        if self._stop_event.is_set():
+                            break
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            resp = self._parse_sync_payload(msg.data)
+                            if resp:
+                                await self._dispatch_sync(resp)
+                        elif msg.type == aiohttp.WSMsgType.BINARY:
+                            resp = self._parse_sync_payload(msg.data)
+                            if resp:
+                                await self._dispatch_sync(resp)
+                        elif msg.type in (
+                            aiohttp.WSMsgType.CLOSED,
+                            aiohttp.WSMsgType.ERROR,
+                        ):
+                            break
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                if not self._stop_event.is_set():
+                    logger.warning(f"WebSocket 连接异常: {e}")
+            finally:
+                if session is not None and not session.closed:
+                    await session.close()
+                if self._ws_session is session:
+                    self._ws_session = None
+
+            if self._stop_event.is_set():
+                break
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 1.5, 30.0)
+
+        logger.info("消息 WebSocket 已停止")
+
     # ==================== 启动监听 ====================
-    def start(self, handler: MessageHandler):
-        """启动消息监听，回调会收到完整的 LwApiClient 实例"""
+    def start(
+        self,
+        handler: MessageHandler,
+        *,
+        mode: str | SyncMode = "poll",
+        wxid: Optional[str] = None,
+    ):
+        """
+        启动消息监听，回调会收到完整的 LwApiClient 实例。
+
+        Args:
+            handler: 消息处理回调
+            mode: poll（HTTP 长轮询）或 websocket（每 wxid 一条 WS）
+            wxid: WebSocket 模式必填；未传时使用 client.wxid
+        """
         if self._task and not self._task.done():
-            logger.warning("消息轮询已启动，请勿重复启动")
+            logger.warning("消息监听已启动，请勿重复启动")
             return
 
         if not self.client:
             logger.error("MsgClient.client 未设置！请确保在 LwApiClient 中注入了 self.msg.client = self")
             return
 
+        try:
+            sync_mode = normalize_sync_mode(mode)
+        except ValueError as e:
+            logger.error(str(e))
+            return
+
+        effective_wxid = (wxid or self.client.wxid or "").strip()
+        if sync_mode == "websocket" and not effective_wxid:
+            logger.error("WebSocket 同步需要 wxid，请先登录或传入 wxid")
+            return
+
         self._handler = handler
+        self._sync_mode = sync_mode
         self._stop_event.clear()
-        self._task = asyncio.create_task(self._polling_loop())
-        logger.success("消息长轮询启动成功")
+
+        if sync_mode == "websocket":
+            self._task = asyncio.create_task(self._ws_loop(effective_wxid))
+            logger.success(f"消息 WebSocket 启动成功 (wxid={effective_wxid})")
+        else:
+            self._task = asyncio.create_task(self._polling_loop())
+            logger.success("消息长轮询启动成功")
+
+    @property
+    def sync_mode(self) -> SyncMode:
+        return self._sync_mode
 
     # ==================== 停止监听 ====================
     def stop(self):
-        """停止消息轮询"""
+        """停止消息监听（轮询或 WebSocket）"""
         self._stop_event.set()
         if self._task:
             self._task.cancel()
 
     async def wait_stop(self):
-        """等待轮询任务彻底结束（优雅退出时使用）"""
+        """等待监听任务彻底结束（优雅退出时使用）"""
         if self._task:
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self._ws_session and not self._ws_session.closed:
+            await self._ws_session.close()
+            self._ws_session = None
             
             
     async def send_text_message(

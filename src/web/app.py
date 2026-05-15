@@ -13,7 +13,10 @@ from pathlib import Path
 
 from aiohttp import web, WSMsgType
 
+from lwapi.sync_utils import normalize_sync_mode
+
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
+from src.services.bot_service import DEFAULT_MSG_SYNC_MODE, resolve_msg_sync_mode
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
@@ -66,6 +69,7 @@ class AdminWebApp:
             output.append(
                 {
                     **acc,
+                    "sync_mode": resolve_msg_sync_mode(acc),
                     "running": account_slot_key(acc) in running,
                     "pending_login": i in pending,
                 }
@@ -95,11 +99,17 @@ class AdminWebApp:
         if not device_id:
             return web.json_response({"error": "device_id 必填"}, status=400)
         remark = (body.get("remark") or "").strip() or device_id[:8]
+        sync_mode = (body.get("sync_mode") or DEFAULT_MSG_SYNC_MODE).strip()
+        try:
+            sync_mode = normalize_sync_mode(sync_mode)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
         acc = {
             "device_id": device_id,
             "wxid": (body.get("wxid") or "").strip(),
             "remark": remark,
             "proxy": body.get("proxy"),
+            "sync_mode": sync_mode,
         }
         accounts = load_accounts_safe()
         accounts.append(acc)
@@ -131,6 +141,13 @@ class AdminWebApp:
             accounts[idx]["remark"] = str(body.get("remark") or "").strip()
         if "proxy" in body:
             accounts[idx]["proxy"] = body.get("proxy")
+        if "sync_mode" in body:
+            try:
+                accounts[idx]["sync_mode"] = normalize_sync_mode(
+                    str(body.get("sync_mode") or DEFAULT_MSG_SYNC_MODE)
+                )
+            except ValueError as e:
+                return web.json_response({"error": str(e)}, status=400)
         save_accounts(accounts)
         return web.json_response({"ok": True})
 

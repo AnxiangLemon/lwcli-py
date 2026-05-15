@@ -38,6 +38,7 @@ def load_accounts() -> List[Dict]:
                 "wxid": "",
                 "remark": "主号",
                 "proxy": None,
+                "sync_mode": "ws",  # 可选 "poll" 或 "ws"，不填则使用环境变量 LWAPI_MSG_SYNC_MODE
             }
         ]
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
