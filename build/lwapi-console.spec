@@ -4,9 +4,10 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-ROOT = Path(SPECPATH).resolve().parent.parent
+# SPECPATH = directory containing this .spec file (project/build)
+ROOT = Path(SPECPATH).resolve().parent
 ENTRY = ROOT / "build" / "entry.py"
 STATIC = ROOT / "src" / "web" / "static"
 
@@ -15,6 +16,7 @@ block_cipher = None
 datas = [
     (str(STATIC), "src/web/static"),
 ]
+datas += collect_data_files("tzdata")
 
 hiddenimports = collect_submodules("lwapi") + collect_submodules("pydantic") + [
     "aiohttp",
@@ -33,6 +35,8 @@ hiddenimports = collect_submodules("lwapi") + collect_submodules("pydantic") + [
     "aiosignal",
     "async_timeout",
     "charset_normalizer",
+    "tzdata",
+    "zoneinfo",
 ]
 
 a = Analysis(

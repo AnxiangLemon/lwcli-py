@@ -223,17 +223,29 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
 
 | 系统 | 脚本 | 产物 |
 |------|------|------|
-| Windows | `build/build-windows.ps1` | `dist/lwapi-console/`、`dist/lwapi-console-<版本>-windows-<架构>.zip` |
+| Windows | `build/build-windows.bat`（推荐）或 `build/build-windows.ps1` | `dist/lwapi-console/`、`dist/lwapi-console-<版本>-windows-<架构>.zip` |
 | Linux | `build/build-linux.sh` | 同上（`linux-<架构>`） |
 | macOS | `build/build-macos.sh` | `dist/lwapi-console.app` + 同级 `config/`、`dist/lwapi-console-<版本>-macos-<架构>.zip` |
 
 ### 如何打包（开发者）
 
-**Windows（PowerShell，在项目根目录）：**
+**Windows（Win11 推荐）：**
+
+在资源管理器中 **双击** `build\build-windows.bat`（黑窗口跑完后按任意键关闭）。
+
+或在 **PowerShell / 终端** 里于项目根目录执行：
 
 ```powershell
-.\build\build-windows.ps1
+.\build\build-windows.bat
 ```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build\build-windows.ps1
+```
+
+**不要直接双击 `build-windows.ps1`**：Win11 会弹出「选择打开方式」。打包逻辑已全部放在 **纯 CMD 的 `build-windows.bat`** 里，不依赖 PowerShell 中文编码。
+
+若双击 `.bat` 提示「不是内部或外部命令 / 不是批处理文件」：请用记事本打开该文件确认首行为 `@echo off`；或右键「以管理员身份运行」；或在 **cmd** 里执行：`cd /d 项目路径` 然后 `build\build-windows.bat`。
 
 **Linux：**
 
@@ -280,7 +292,8 @@ python build/package_dist.py
 
 ```text
 build/
-├── build-windows.ps1      # Windows 一键打包
+├── build-windows.bat      # Windows 一键打包（双击运行）
+├── build-windows.ps1      # 同上（由 .bat 调用）
 ├── build-linux.sh         # Linux 一键打包
 ├── build-macos.sh         # macOS 一键打包
 ├── entry.py               # PyInstaller 入口

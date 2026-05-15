@@ -7,6 +7,12 @@ from __future__ import annotations
 import os
 import sys
 
+# zoneinfo on Windows / PyInstaller needs IANA tz database (plugins may use ZoneInfo)
+try:
+    import tzdata  # noqa: F401
+except ImportError:
+    pass
+
 from src.app_paths import prepare_runtime
 
 prepare_runtime()

@@ -73,8 +73,8 @@ def _load_plugins_from_dir() -> List[PluginSpec]:
         sys.modules[mod_name] = module
         try:
             spec_obj.loader.exec_module(module)
-        except Exception:
-            logger.exception(f"加载插件失败: {path}")
+        except Exception as e:
+            logger.warning(f"加载插件失败: {path}: {e}")
             sys.modules.pop(mod_name, None)
             continue
         plugin_spec = _spec_from_module(module, source=str(path))
