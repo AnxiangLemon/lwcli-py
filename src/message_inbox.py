@@ -232,6 +232,7 @@ def _query_list_sync(
     bot_wxid: Optional[str],
     msg_type: Optional[int],
     peer_wxid: Optional[str],
+    search: Optional[str],
     limit: int,
     offset: int,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -254,6 +255,9 @@ def _query_list_sync(
             if peer_wxid and peer_wxid.strip():
                 conds.append("peer_wxid = ?")
                 params.append(peer_wxid.strip())
+            if search and search.strip():
+                conds.append("INSTR(LOWER(content), LOWER(?)) > 0")
+                params.append(search.strip())
             where = (" WHERE " + " AND ".join(conds)) if conds else ""
             cur.execute(f"SELECT COUNT(*) FROM inbox{where}", params)
             total = int(cur.fetchone()[0])
@@ -296,6 +300,7 @@ async def query_list(
     bot_wxid: Optional[str] = None,
     msg_type: Optional[int] = None,
     peer_wxid: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -304,6 +309,7 @@ async def query_list(
         bot_wxid=bot_wxid,
         msg_type=msg_type,
         peer_wxid=peer_wxid,
+        search=search,
         limit=limit,
         offset=offset,
     )

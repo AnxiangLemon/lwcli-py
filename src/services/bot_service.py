@@ -54,6 +54,8 @@ class BotService:
         self._lock = asyncio.Lock()
         self._events = account_events
         self._login_pending: Set[int] = set()
+        self._clients_lock = asyncio.Lock()
+        self._online_clients_by_wxid: Dict[str, LwApiClient] = {}
 
     @property
     def login_pending_indices(self) -> Set[int]:
@@ -96,6 +98,38 @@ class BotService:
             except asyncio.CancelledError:
                 pass
         return True
+
+    async def _register_online_client(self, wxid: str, client: LwApiClient) -> None:
+        key = (wxid or "").strip()
+        if not key:
+            return
+        async with self._clients_lock:
+            self._online_clients_by_wxid[key] = client
+
+    async def _unregister_online_client(self, wxid: str) -> None:
+        key = (wxid or "").strip()
+        if not key:
+            return
+        async with self._clients_lock:
+            self._online_clients_by_wxid.pop(key, None)
+
+    async def send_text_message(self, bot_wxid: str, to_wxid: str, content: str) -> dict:
+        """
+        使用当前在线的机器人客户端发送文本（需该账号机器人已启动且已登录）。
+
+        Returns:
+            LwApi 原始返回 dict（含 code / message / data）。
+        """
+        b = (bot_wxid or "").strip()
+        t = (to_wxid or "").strip()
+        c = (content or "").strip()
+        if not b or not t or not c:
+            raise ValueError("bot_wxid、to_wxid、content 均不能为空")
+        async with self._clients_lock:
+            client = self._online_clients_by_wxid.get(b)
+        if client is None:
+            raise ValueError("该机器人未在线：请先在账号列表启动对应机器人并完成登录")
+        return await client.msg.send_text_message(t, c)
 
     async def _run_single_bot(
         self, acc: dict, all_accounts: list, account_idx: int
@@ -192,8 +226,12 @@ class BotService:
                                 }
                             )
 
-                        hold = asyncio.get_running_loop().create_future()
-                        await hold
+                        await self._register_online_client(wxid, client)
+                        try:
+                            hold = asyncio.get_running_loop().create_future()
+                            await hold
+                        finally:
+                            await self._unregister_online_client(wxid)
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:

@@ -13,6 +13,8 @@ from pathlib import Path
 
 from aiohttp import web, WSMsgType
 
+from lwapi.exceptions import ApiError, HttpError
+
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
 from src.message_inbox import query_list, query_summary
 from src.plugins.registry import REGISTRY, list_plugin_specs
@@ -50,6 +52,7 @@ class AdminWebApp:
                 web.put("/api/plugins", self.api_plugins_put),
                 web.get("/api/messages/summary", self.api_messages_summary),
                 web.get("/api/messages", self.api_messages_list),
+                web.post("/api/messages/send", self.api_messages_send),
             ]
         )
         return app
@@ -250,6 +253,7 @@ class AdminWebApp:
     async def api_messages_list(self, request: web.Request) -> web.Response:
         bot = (request.rel_url.query.get("bot_wxid") or "").strip() or None
         peer = (request.rel_url.query.get("peer_wxid") or "").strip() or None
+        q = (request.rel_url.query.get("q") or "").strip() or None
         mt_raw = request.rel_url.query.get("msg_type")
         msg_type: int | None
         if mt_raw is None or str(mt_raw).strip() == "":
@@ -271,12 +275,40 @@ class AdminWebApp:
             bot_wxid=bot,
             msg_type=msg_type,
             peer_wxid=peer,
+            search=q,
             limit=limit,
             offset=offset,
         )
         return web.json_response(
             {"items": items, "total": total, "msg_sync_mode": DEFAULT_MSG_SYNC_MODE}
         )
+
+    async def api_messages_send(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        bot = (body.get("bot_wxid") or "").strip()
+        to_wxid = (body.get("to_wxid") or "").strip()
+        content = (body.get("content") or "").strip()
+        try:
+            result = await self.bot_service.send_text_message(bot, to_wxid, content)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except ApiError as e:
+            return web.json_response(
+                {"error": f"API {e.code}: {e.message}", "code": e.code},
+                status=502,
+            )
+        except HttpError as e:
+            return web.json_response(
+                {
+                    "error": f"HTTP {e.status_code}: {e.message}",
+                    "status_code": e.status_code,
+                },
+                status=502,
+            )
+        return web.json_response({"ok": True, "result": result})
 
 
 def create_app() -> web.Application:
