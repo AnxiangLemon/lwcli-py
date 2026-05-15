@@ -7,12 +7,17 @@
 from __future__ import annotations
 
 import os
+import threading
+import webbrowser
 from typing import Optional
 
 from aiohttp import web
 
+from .app_paths import prepare_runtime
 from .utils import setup_logger
 from .web.app import create_app
+
+prepare_runtime()
 
 # 日志初始化（全局复用）
 logger = setup_logger("main")
@@ -49,6 +54,27 @@ def get_display_host(host: str) -> str:
     return "127.0.0.1" if host in ("0.0.0.0", "::") else host
 
 
+def _should_open_browser() -> bool:
+    return os.getenv("LWAPI_OPEN_BROWSER", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _schedule_open_browser(display_host: str, port: int) -> None:
+    url = f"http://{display_host}:{port}"
+
+    def _open() -> None:
+        try:
+            webbrowser.open(url, new=1)
+        except Exception as e:
+            logger.warning(f"自动打开浏览器失败: {e}")
+
+    threading.Timer(1.2, _open).start()
+
+
 def main() -> None:
     """Web 运维台主启动函数"""
     host, port = get_server_config()
@@ -57,6 +83,9 @@ def main() -> None:
     # 使用日志替代 print（更规范，支持日志级别/持久化）
     logger.info(f"Web 运维台启动成功 → http://{display_host}:{port}")
     logger.info(f"监听地址: {host}:{port}")
+
+    if _should_open_browser():
+        _schedule_open_browser(display_host, port)
 
     # 启动 aiohttp 应用
     web.run_app(create_app(), host=host, port=port)

@@ -1,0 +1,28 @@
+LWAPI 运维台 — 使用说明（打包版）
+================================
+
+【前提】
+1. 已部署可访问的 LwApi 服务（默认 http://localhost:8081）。
+2. 将 .env.example 复制为 .env，按实际地址修改 LWAPI_BASE_URL 等。
+
+【启动】
+- Windows：双击 lwapi-console\lwapi-console.exe
+- Linux：在终端执行 ./lwapi-console/lwapi-console
+- macOS：双击 lwapi-console.app，或在终端：
+    open lwapi-console.app
+
+启动后会自动打开浏览器；若未打开，请访问：
+  http://127.0.0.1:26121
+（端口以 .env 中 LWAPI_WEB_PORT 为准）
+
+【目录】（与可执行文件同级；macOS 为 .app 所在文件夹）
+  config/accounts.json   — 账号列表（可在运维台界面维护）
+  config/plugins.json    — 已启用插件
+  plugins/               — lwplugin_*.py 插件
+  logs/                  — 运行日志
+
+【扫码登录】
+先打开对应账号页面并保持 WebSocket 连接，再在运维台启动机器人扫码。
+
+【关闭】
+在运行窗口按 Ctrl+C，或关闭终端窗口。

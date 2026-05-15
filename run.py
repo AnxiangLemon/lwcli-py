@@ -4,6 +4,10 @@
 KeyboardInterrupt 时静默退出；其它未捕获异常打印一行提示（便于 systemd / 终端观察）。
 """
 
+from src.app_paths import prepare_runtime
+
+prepare_runtime()
+
 from src.main import main
 
 try:

@@ -14,7 +14,7 @@ pip install -r requirements.txt
 python run.py
 ```
 
-默认运维台监听 **`0.0.0.0:26121`**，浏览器打开终端打印的地址（本机一般为 `http://127.0.0.1:26121`）。启动机器人做扫码登录前，**请先打开对应账号页面并保持 WebSocket 连接**，否则界面收不到二维码（见下文「扫码与 WebSocket」）。
+默认运维台监听 **`0.0.0.0:8090`**，浏览器打开终端打印的地址（本机一般为 `http://127.0.0.1:8090`）。启动机器人做扫码登录前，**请先打开对应账号页面并保持 WebSocket 连接**，否则界面收不到二维码（见下文「扫码与 WebSocket」）。
 
 ### 环境变量
 
@@ -22,7 +22,7 @@ python run.py
 |------|--------|------|
 | `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址；`BotService` 创建 `LwApiClient` 时使用。 |
 | `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址。 |
-| `LWAPI_WEB_PORT` | `26121` | 运维台端口。 |
+| `LWAPI_WEB_PORT` | `8090` | 运维台端口。 |
 | `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 用户自定义插件目录；可改为绝对路径，便于多项目共用一套插件。 |
 
 可在项目根目录放置 **`.env`**：`src/services/bot_service.py` 在导入时会执行 `load_dotenv()`。
@@ -210,5 +210,84 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
 | `GET` | `/api/accounts/{idx}/log?lines=50` | 当日日志尾部。 |
 | `GET` / `PUT` | `/api/plugins` | 列出插件元数据 / 保存 `enabled`。 |
 | `GET` | `/ws/account/{idx}` | 账号级 WebSocket（扫码与登录事件）。 |
+
+---
+
+## 打包分发（对方无需安装 Python）
+
+本项目是**本机 Web 运维台**（浏览器访问），不是传统 GUI 桌面程序。使用 **PyInstaller** 将 Python 与依赖打进可执行文件；对方仍需**单独部署 LwApi**（`LWAPI_BASE_URL`），打包不会包含 LwApi 服务本身。
+
+**重要：** 必须在**目标操作系统**上分别打包（在 Windows 上打 Windows 包，在 macOS 上打 `.app`，在 Linux 上打 Linux 包）。在 WSL 里打出来的是 Linux 包，不能给 Windows 用户直接使用。
+
+### 打包脚本一览
+
+| 系统 | 脚本 | 产物 |
+|------|------|------|
+| Windows | `build/build-windows.ps1` | `dist/lwapi-console/`、`dist/lwapi-console-<版本>-windows-<架构>.zip` |
+| Linux | `build/build-linux.sh` | 同上（`linux-<架构>`） |
+| macOS | `build/build-macos.sh` | `dist/lwapi-console.app` + 同级 `config/`、`dist/lwapi-console-<版本>-macos-<架构>.zip` |
+
+### 如何打包（开发者）
+
+**Windows（PowerShell，在项目根目录）：**
+
+```powershell
+.\build\build-windows.ps1
+```
+
+**Linux：**
+
+```bash
+chmod +x build/build-linux.sh
+./build/build-linux.sh
+```
+
+**macOS：**
+
+```bash
+chmod +x build/build-macos.sh
+./build/build-macos.sh
+```
+
+脚本会自动：创建/使用 `venv`、安装 `requirements.txt` 与 `build/requirements-build.txt`（含 PyInstaller）、执行 `build/lwapi-console.spec`、运行 `build/package_dist.py` 合并配置模板并生成 zip。
+
+仅重新组装 zip（已跑过 PyInstaller 时）：
+
+```bash
+python build/package_dist.py
+```
+
+### 发给对方什么
+
+优先发送 **`dist/lwapi-console-<版本>-<平台>-<架构>.zip`**。对方解压后：
+
+1. 将 `.env.example` 复制为 `.env`，填写 `LWAPI_BASE_URL`（LwApi 地址）。
+2. 运行可执行文件（打包版默认会自动打开浏览器；端口默认 **26121**，见 `.env` 中 `LWAPI_WEB_PORT`）。
+3. 在运维台添加账号；`config/`、`plugins/`、`logs/` 与程序在同一目录（macOS 为 **`.app` 所在文件夹**内，不要放进 `.app` 包内）。
+
+更详细的对方说明见解压包内的 **`使用说明.txt`**。
+
+### 开发运行 vs 打包运行
+
+| 方式 | 命令 | 说明 |
+|------|------|------|
+| 开发 | `python run.py` | 需本机 Python 3.9+ |
+| 打包 | 双击/运行 `lwapi-console` | 无需 Python；入口为 `build/entry.py` |
+
+打包后工作目录会自动切到「程序旁」目录，保证 `config/`、`plugins/` 相对路径与开发时一致。设置 `LWAPI_OPEN_BROWSER=0` 可关闭启动时自动打开浏览器。
+
+### 目录说明（build/）
+
+```text
+build/
+├── build-windows.ps1      # Windows 一键打包
+├── build-linux.sh         # Linux 一键打包
+├── build-macos.sh         # macOS 一键打包
+├── entry.py               # PyInstaller 入口
+├── lwapi-console.spec     # PyInstaller 配置
+├── package_dist.py        # 合并模板、生成 zip
+├── requirements-build.txt # 打包额外依赖（pyinstaller）
+└── dist-template/         # 随包分发的 .env.example、使用说明等
+```
 
 ---

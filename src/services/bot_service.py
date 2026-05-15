@@ -21,6 +21,11 @@ from typing import Dict, Optional, Set
 
 from dotenv import load_dotenv
 
+from src.app_paths import env_file, prepare_runtime
+
+prepare_runtime()
+load_dotenv(env_file())
+
 from lwapi import LwApiClient
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
@@ -30,7 +35,6 @@ from src.message_handler import default_message_handler
 from src.runtime.account_events import AccountEventHub
 from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
-load_dotenv()
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
 DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
     os.getenv("LWAPI_MSG_SYNC_MODE"),

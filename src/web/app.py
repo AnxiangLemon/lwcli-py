@@ -15,7 +15,9 @@ from aiohttp import web, WSMsgType
 
 from lwapi.exceptions import ApiError, HttpError
 
+from src.app_paths import static_dir
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
+from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import query_list, query_summary
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
@@ -23,7 +25,7 @@ from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
 from src.utils import read_account_today_log_tail, effective_account_remark
 
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = static_dir()
 
 
 class AdminWebApp:
@@ -98,9 +100,10 @@ class AdminWebApp:
             body = await request.json()
         except json.JSONDecodeError:
             return web.json_response({"error": "无效 JSON"}, status=400)
-        device_id = (body.get("device_id") or "").strip()
-        if not device_id:
-            return web.json_response({"error": "device_id 必填"}, status=400)
+        device_id = normalize_device_id(str(body.get("device_id") or ""))
+        err = device_id_error_message(device_id)
+        if err:
+            return web.json_response({"error": err}, status=400)
         remark = (body.get("remark") or "").strip() or device_id[:8]
         acc = {
             "device_id": device_id,
@@ -131,7 +134,11 @@ class AdminWebApp:
                 {"error": "该账号正在登录中，请稍后再编辑"}, status=409
             )
         if "device_id" in body:
-            accounts[idx]["device_id"] = str(body["device_id"]).strip()
+            did = normalize_device_id(str(body["device_id"]))
+            err = device_id_error_message(did)
+            if err:
+                return web.json_response({"error": err}, status=400)
+            accounts[idx]["device_id"] = did
         if "wxid" in body:
             accounts[idx]["wxid"] = str(body.get("wxid") or "").strip()
         if "remark" in body:
