@@ -25,6 +25,10 @@
           <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
           账号列表
         </button>
+        <button type="button" class="nav-link" data-nav="messages" onclick="showView('messages')">
+          <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+          消息聚合
+        </button>
         <button type="button" class="nav-link" data-nav="logs" onclick="showView('logs')">
           <span class="nav-icon" aria-hidden="true"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>
           日志
@@ -63,10 +67,6 @@
         <form onsubmit="addAccount(event)" class="form-row">
           <input type="text" id="new-device" placeholder="device_id（16位）" required />
           <input type="text" id="new-remark" placeholder="机器人备注" required/>
-          <select id="new-sync-mode" class="log-select" aria-label="消息同步方式" title="消息同步方式">
-            <option value="poll">HTTP 长轮询</option>
-            <option value="websocket">WebSocket 实时</option>
-          </select>
           <button type="submit" class="btn btn-primary">添加</button>
         </form>
       </div>
@@ -74,6 +74,56 @@
       <div class="card">
         <h2>账号列表</h2>
         <div id="accounts"></div>
+      </div>
+    </section>
+
+    <section id="view-messages" class="view-panel" aria-label="消息聚合">
+      <div class="card msg-inbox-card">
+        <div class="msg-inbox-head">
+          <div>
+            <h2 style="margin:0 0 6px">消息聚合</h2>
+            <p class="subtitle" style="margin:0" id="msg-sync-hint">同步方式由环境变量 <code>LWAPI_MSG_SYNC_MODE</code> 控制（默认 WebSocket）。</p>
+          </div>
+          <div class="msg-inbox-toolbar">
+            <label class="msg-inbox-label" for="msg-bot-filter">机器人</label>
+            <select id="msg-bot-filter" class="log-select msg-bot-select" onchange="onMsgBotFilterChange()">
+              <option value="">全部账号</option>
+            </select>
+            <button type="button" class="btn" onclick="loadMessagesPanel(true)">刷新</button>
+          </div>
+        </div>
+        <div class="msg-inbox-layout">
+          <nav class="msg-inbox-nav" id="msg-aggregate-nav" aria-label="聚合分类">
+            <p class="msg-nav-title">导航</p>
+        <button type="button" class="msg-nav-item is-active" data-filter="all" onclick="selectMsgFilterAll()">全部消息</button>
+            <p class="msg-nav-title">按类型</p>
+            <div id="msg-nav-by-type" class="msg-nav-stack"></div>
+            <p class="msg-nav-title">按会话</p>
+            <div id="msg-nav-by-peer" class="msg-nav-stack"></div>
+          </nav>
+          <div class="msg-inbox-main">
+            <p class="msg-list-meta" id="msg-list-meta">共 0 条</p>
+            <div class="msg-table-wrap">
+              <table class="msg-table" id="msg-table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>机器人</th>
+                    <th>会话</th>
+                    <th>类型</th>
+                    <th>内容</th>
+                  </tr>
+                </thead>
+                <tbody id="msg-table-body"></tbody>
+              </table>
+            </div>
+            <div class="msg-pagination">
+              <button type="button" class="btn btn-ghost" id="msg-page-prev" onclick="msgPageDelta(-1)">上一页</button>
+              <span id="msg-page-label" class="msg-page-label"></span>
+              <button type="button" class="btn btn-ghost" id="msg-page-next" onclick="msgPageDelta(1)">下一页</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -131,14 +181,6 @@
             <label for="modal-edit-wxid">wxid（可空）</label>
             <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
           </div>
-          <div class="modal-field">
-            <label for="modal-edit-sync-mode">消息同步</label>
-            <select id="modal-edit-sync-mode" class="modal-input">
-              <option value="poll">HTTP 长轮询</option>
-              <option value="websocket">WebSocket 实时</option>
-            </select>
-            <p class="subtitle" style="margin:6px 0 0;font-size:12px">WebSocket 模式每个 wxid 独立连接，需先登录获得 wxid。</p>
-          </div>
           <div class="app-modal-actions">
             <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
             <button type="submit" class="btn btn-primary" id="modal-edit-submit">保存</button>
@@ -162,7 +204,7 @@
   <script>
     const accountWs = {};
 
-    const VIEW_TITLES = { accounts: '账号列表', logs: '日志', plugins: '插件管理' };
+    const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: '日志', plugins: '插件管理' };
 
     function setMainTitle(name) {
       const el = document.getElementById('main-title');
@@ -200,6 +242,7 @@
       document.body.classList.remove('sidebar-open');
       if (name === 'logs') populateLogAccountSelectFromCache();
       if (name === 'plugins') loadPluginsPanel();
+      if (name === 'messages') loadMessagesPanel(true);
     }
 
     async function fetchJson(url, options = {}) {
@@ -318,10 +361,6 @@
       return '<span class="badge badge-off">未运行</span>';
     }
 
-    function syncModeLabel(mode) {
-      return mode === 'websocket' ? 'WebSocket' : 'HTTP 长轮询';
-    }
-
     function updateStartAllButton(accounts) {
       const btnAll = document.getElementById('btn-start-all');
       if (!btnAll) return;
@@ -343,10 +382,8 @@
         if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
         const d = card.querySelector('.acc-device');
         const w = card.querySelector('.acc-wxid');
-        const s = card.querySelector('.acc-sync-mode');
         if (d) d.textContent = acc.device_id;
         if (w) w.textContent = acc.wxid || '—';
-        if (s) s.textContent = syncModeLabel(acc.sync_mode || 'poll');
 
         const running = acc.running;
         const pending = acc.pending_login;
@@ -381,7 +418,6 @@
         '<dl class="acc-meta-list">' +
         '<div class="acc-meta-row"><dt>device</dt><dd class="acc-device">' + esc(acc.device_id) + '</dd></div>' +
         '<div class="acc-meta-row"><dt>wxid</dt><dd class="acc-wxid">' + esc(acc.wxid || '—') + '</dd></div>' +
-        '<div class="acc-meta-row"><dt>同步</dt><dd class="acc-sync-mode">' + esc(syncModeLabel(acc.sync_mode || 'poll')) + '</dd></div>' +
         '</dl>' +
         '<div class="actions acc-actions">' +
         '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
@@ -526,11 +562,10 @@
       await fetchJson('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id, remark, sync_mode }),
+        body: JSON.stringify({ device_id, remark }),
       });
       document.getElementById('new-device').value = '';
       document.getElementById('new-remark').value = '';
-      document.getElementById('new-sync-mode').value = 'poll';
       await refreshAccounts({ soft: false });
     }
 
@@ -630,8 +665,6 @@
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
       document.getElementById('modal-edit-wxid').value = acc.wxid || '';
-      document.getElementById('modal-edit-sync-mode').value =
-        acc.sync_mode === 'websocket' ? 'websocket' : 'poll';
       openAppModal();
       setTimeout(function () {
         var el = document.getElementById('modal-edit-device');
@@ -647,19 +680,13 @@
       var device_id = document.getElementById('modal-edit-device').value.trim();
       var remark = document.getElementById('modal-edit-remark').value.trim();
       var wxid = document.getElementById('modal-edit-wxid').value.trim();
-      var sync_mode = document.getElementById('modal-edit-sync-mode').value;
       if (!device_id) return;
       if (btn) btn.disabled = true;
       try {
         await fetchJson('/api/accounts/' + index, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            device_id: device_id,
-            remark: remark,
-            wxid: wxid,
-            sync_mode: sync_mode,
-          }),
+          body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
         });
         closeAppModal();
         await refreshAccounts({ soft: false });
@@ -774,6 +801,269 @@
       } catch (e) {
         host.textContent = e.message || String(e);
       }
+    }
+
+    var MSG_PAGE_SIZE = 40;
+    var msgUi = {
+      page: 0,
+      filter: 'all',
+      msgType: null,
+      peerBot: null,
+      peerWxid: null,
+    };
+
+    function msgBotQuery() {
+      var sel = document.getElementById('msg-bot-filter');
+      return sel && sel.value ? String(sel.value).trim() : '';
+    }
+
+    async function populateMsgBotOptions() {
+      var sel = document.getElementById('msg-bot-filter');
+      if (!sel) return;
+      var prev = sel.value;
+      if (!_lastAccountsPayload || !_lastAccountsPayload.length) {
+        try {
+          var d = await fetchJson('/api/accounts');
+          _lastAccountsPayload = d.accounts || [];
+        } catch (e) {
+          _lastAccountsPayload = [];
+        }
+      }
+      sel.innerHTML = '<option value="">全部账号</option>';
+      (_lastAccountsPayload || []).forEach(function (a) {
+        var wx = (a.wxid || '').trim();
+        if (!wx) return;
+        var o = document.createElement('option');
+        o.value = wx;
+        var lab = (a.remark || '').trim() || wx.slice(0, 12);
+        o.textContent = lab + ' · ' + wx;
+        sel.appendChild(o);
+      });
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === prev) {
+          found = true;
+          break;
+        }
+      }
+      if (found) sel.value = prev;
+    }
+
+    function fmtMsgTs(ts) {
+      if (ts == null || ts === '') return '—';
+      var n = Number(ts);
+      if (!isFinite(n)) return '—';
+      if (n < 1e12) n = n * 1000;
+      var d = new Date(n);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString();
+    }
+
+    function renderMsgAggregateNav(summ) {
+      var byType = document.getElementById('msg-nav-by-type');
+      var byPeer = document.getElementById('msg-nav-by-peer');
+      if (!byType || !byPeer) return;
+      window._msgNavTypes = summ.by_type || [];
+      byType.innerHTML = window._msgNavTypes
+        .map(function (t, i) {
+          return (
+            '<button type="button" class="msg-nav-item" data-kind="type" data-index="' +
+            i +
+            '" onclick="onPickMsgType(' +
+            i +
+            ')">' +
+            esc(t.label) +
+            ' <span class="msg-nav-count">' +
+            t.count +
+            '</span></button>'
+          );
+        })
+        .join('');
+      window._msgNavPeers = summ.by_peer || [];
+      byPeer.innerHTML = window._msgNavPeers
+        .map(function (p, i) {
+          var pw = p.peer_wxid || '';
+          var shortPeer = pw.length > 26 ? pw.slice(0, 24) + '…' : pw;
+          var bw = p.bot_wxid || '';
+          var shortBot = bw.length > 16 ? bw.slice(0, 14) + '…' : bw;
+          return (
+            '<button type="button" class="msg-nav-item msg-nav-peer" data-kind="peer" data-index="' +
+            i +
+            '" onclick="onPickMsgPeer(' +
+            i +
+            ')"><span class="msg-peer-line1">' +
+            esc(shortPeer) +
+            '</span><span class="msg-peer-meta">' +
+            esc(shortBot) +
+            ' · ' +
+            p.count +
+            '</span></button>'
+          );
+        })
+        .join('');
+    }
+
+    function highlightMsgNav() {
+      document.querySelectorAll('.msg-nav-item').forEach(function (b) {
+        b.classList.remove('is-active');
+      });
+      if (msgUi.filter === 'all') {
+        var a = document.querySelector('.msg-nav-item[data-filter="all"]');
+        if (a) a.classList.add('is-active');
+        return;
+      }
+      if (msgUi.filter === 'type' && msgUi.msgType != null) {
+        (window._msgNavTypes || []).forEach(function (t, i) {
+          if (t.msg_type === msgUi.msgType) {
+            var b = document.querySelector('.msg-nav-item[data-kind="type"][data-index="' + i + '"]');
+            if (b) b.classList.add('is-active');
+          }
+        });
+        return;
+      }
+      if (msgUi.filter === 'peer' && msgUi.peerWxid) {
+        (window._msgNavPeers || []).forEach(function (p, i) {
+          if (p.peer_wxid === msgUi.peerWxid && p.bot_wxid === msgUi.peerBot) {
+            var b = document.querySelector('.msg-nav-item[data-kind="peer"][data-index="' + i + '"]');
+            if (b) b.classList.add('is-active');
+          }
+        });
+      }
+    }
+
+    async function selectMsgFilterAll() {
+      msgUi.filter = 'all';
+      msgUi.msgType = null;
+      msgUi.peerBot = null;
+      msgUi.peerWxid = null;
+      msgUi.page = 0;
+      await loadMessagesPanel(true);
+    }
+
+    async function onPickMsgType(idx) {
+      var t = (window._msgNavTypes || [])[idx];
+      if (!t) return;
+      msgUi.filter = 'type';
+      msgUi.msgType = t.msg_type;
+      msgUi.peerBot = null;
+      msgUi.peerWxid = null;
+      msgUi.page = 0;
+      highlightMsgNav();
+      await loadMessagesListRows();
+    }
+
+    async function onPickMsgPeer(idx) {
+      var p = (window._msgNavPeers || [])[idx];
+      if (!p) return;
+      msgUi.filter = 'peer';
+      msgUi.msgType = null;
+      msgUi.peerBot = p.bot_wxid;
+      msgUi.peerWxid = p.peer_wxid;
+      msgUi.page = 0;
+      highlightMsgNav();
+      await loadMessagesListRows();
+    }
+
+    function onMsgBotFilterChange() {
+      msgUi.page = 0;
+      msgUi.filter = 'all';
+      msgUi.msgType = null;
+      msgUi.peerBot = null;
+      msgUi.peerWxid = null;
+      loadMessagesPanel(true);
+    }
+
+    async function loadMessagesListRows() {
+      var params = new URLSearchParams();
+      var dropBot = msgBotQuery();
+      if (dropBot) params.set('bot_wxid', dropBot);
+      if (msgUi.filter === 'type' && msgUi.msgType != null) params.set('msg_type', String(msgUi.msgType));
+      if (msgUi.filter === 'peer' && msgUi.peerWxid) {
+        params.set('peer_wxid', msgUi.peerWxid);
+        if (msgUi.peerBot) params.set('bot_wxid', msgUi.peerBot);
+      }
+      params.set('limit', String(MSG_PAGE_SIZE));
+      params.set('offset', String(msgUi.page * MSG_PAGE_SIZE));
+      var data = await fetchJson('/api/messages?' + params.toString());
+      var meta = document.getElementById('msg-list-meta');
+      var total = data.total != null ? data.total : 0;
+      if (meta) {
+        meta.textContent =
+          '共 ' +
+          total +
+          ' 条 · 第 ' +
+          (msgUi.page + 1) +
+          ' 页 · 每页 ' +
+          MSG_PAGE_SIZE;
+      }
+      var tb = document.getElementById('msg-table-body');
+      if (tb) {
+        var rows = data.items || [];
+        if (!rows.length) {
+          tb.innerHTML =
+            '<tr><td colspan="5" class="msg-empty">暂无记录（机器人收到消息后才会入库）。</td></tr>';
+        } else {
+          tb.innerHTML = rows
+            .map(function (r) {
+              return (
+                '<tr>' +
+                '<td class="msg-td-time">' +
+                esc(fmtMsgTs(r.received_at)) +
+                '</td>' +
+                '<td class="msg-td-mono">' +
+                esc(r.bot_wxid || '') +
+                '</td>' +
+                '<td class="msg-td-mono">' +
+                esc(r.peer_wxid || '') +
+                '</td>' +
+                '<td>' +
+                esc(r.category || '') +
+                '</td>' +
+                '<td class="msg-td-content">' +
+                esc(r.content || '') +
+                '</td>' +
+                '</tr>'
+              );
+            })
+            .join('');
+        }
+      }
+      var prev = document.getElementById('msg-page-prev');
+      var next = document.getElementById('msg-page-next');
+      var lastPage = total <= 0 ? 0 : Math.floor((total - 1) / MSG_PAGE_SIZE);
+      if (prev) prev.disabled = msgUi.page <= 0;
+      if (next) next.disabled = msgUi.page >= lastPage;
+    }
+
+    async function loadMessagesPanel(reloadNav) {
+      var doNav = reloadNav !== false;
+      try {
+        await populateMsgBotOptions();
+        var botQ = msgBotQuery();
+        var qSumm = botQ ? '?bot_wxid=' + encodeURIComponent(botQ) : '';
+        var summ = await fetchJson('/api/messages/summary' + qSumm);
+        var hint = document.getElementById('msg-sync-hint');
+        if (hint) {
+          var m = summ.msg_sync_mode === 'websocket' ? 'WebSocket' : 'HTTP 长轮询';
+          hint.innerHTML =
+            '当前同步方式：<strong>' +
+            esc(m) +
+            '</strong>（仅由环境变量 <code>LWAPI_MSG_SYNC_MODE</code> 控制；未设置时默认为 WebSocket）。入库：<code>config/messages.sqlite</code>。';
+        }
+        if (doNav) {
+          renderMsgAggregateNav(summ);
+          highlightMsgNav();
+        }
+        await loadMessagesListRows();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function msgPageDelta(d) {
+      msgUi.page = Math.max(0, msgUi.page + d);
+      await loadMessagesListRows();
+      highlightMsgNav();
     }
 
     refreshAccounts({ soft: false });

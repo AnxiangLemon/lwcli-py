@@ -38,14 +38,6 @@ DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
 )
 
 
-def resolve_msg_sync_mode(account: dict) -> SyncMode:
-    """账号级 sync_mode 优先，否则使用环境变量 LWAPI_MSG_SYNC_MODE。"""
-    raw = account.get("sync_mode")
-    if raw is None or str(raw).strip() == "":
-        return DEFAULT_MSG_SYNC_MODE
-    return normalize_sync_mode(str(raw), default=DEFAULT_MSG_SYNC_MODE)
-
-
 def _env_int(name: str, default: int, minimum: int) -> int:
     try:
         v = int(os.getenv(name, str(default)))
@@ -176,7 +168,7 @@ class BotService:
                             bot_logger.warning(
                                 f"【{remark}】Reportclientcheck 未成功，将继续运行"
                             )
-                        sync_mode = resolve_msg_sync_mode(acc)
+                        sync_mode = DEFAULT_MSG_SYNC_MODE
                         client.msg.start(
                             handler=default_message_handler,
                             mode=sync_mode,

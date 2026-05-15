@@ -12,6 +12,7 @@ from loguru import logger
 from lwapi import LwApiClient
 from lwapi.models.msg import SyncMessageResponse
 
+from src.message_inbox import append_sync_messages
 from src.plugins.registry import resolve_handlers
 from src.plugins.settings import load_enabled_ids
 
@@ -20,6 +21,12 @@ async def composite_message_handler(
     client: LwApiClient, resp: SyncMessageResponse
 ) -> None:
     """根据 config/plugins.json 的 enabled 顺序依次执行各插件。"""
+    if resp.addMsgs:
+        try:
+            await append_sync_messages(client, resp)
+        except Exception:
+            logger.exception("消息入库（聚合用）失败")
+
     enabled = load_enabled_ids()
     specs = resolve_handlers(enabled)
     if not specs:

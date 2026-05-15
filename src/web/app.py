@@ -13,14 +13,12 @@ from pathlib import Path
 
 from aiohttp import web, WSMsgType
 
-from lwapi.sync_utils import normalize_sync_mode
-
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
-from src.services.bot_service import DEFAULT_MSG_SYNC_MODE, resolve_msg_sync_mode
+from src.message_inbox import query_list, query_summary
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
-from src.services.bot_service import BotService
+from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
 from src.utils import read_account_today_log_tail, effective_account_remark
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -50,6 +48,8 @@ class AdminWebApp:
                 web.post("/api/start-all", self.api_start_all),
                 web.get("/api/plugins", self.api_plugins_get),
                 web.put("/api/plugins", self.api_plugins_put),
+                web.get("/api/messages/summary", self.api_messages_summary),
+                web.get("/api/messages", self.api_messages_list),
             ]
         )
         return app
@@ -66,10 +66,10 @@ class AdminWebApp:
         pending = self.bot_service.login_pending_indices
         output = []
         for i, acc in enumerate(accounts):
+            clean = {k: v for k, v in acc.items() if k != "sync_mode"}
             output.append(
                 {
-                    **acc,
-                    "sync_mode": resolve_msg_sync_mode(acc),
+                    **clean,
                     "running": account_slot_key(acc) in running,
                     "pending_login": i in pending,
                 }
@@ -99,17 +99,11 @@ class AdminWebApp:
         if not device_id:
             return web.json_response({"error": "device_id 必填"}, status=400)
         remark = (body.get("remark") or "").strip() or device_id[:8]
-        sync_mode = (body.get("sync_mode") or DEFAULT_MSG_SYNC_MODE).strip()
-        try:
-            sync_mode = normalize_sync_mode(sync_mode)
-        except ValueError as e:
-            return web.json_response({"error": str(e)}, status=400)
         acc = {
             "device_id": device_id,
             "wxid": (body.get("wxid") or "").strip(),
             "remark": remark,
             "proxy": body.get("proxy"),
-            "sync_mode": sync_mode,
         }
         accounts = load_accounts_safe()
         accounts.append(acc)
@@ -141,13 +135,6 @@ class AdminWebApp:
             accounts[idx]["remark"] = str(body.get("remark") or "").strip()
         if "proxy" in body:
             accounts[idx]["proxy"] = body.get("proxy")
-        if "sync_mode" in body:
-            try:
-                accounts[idx]["sync_mode"] = normalize_sync_mode(
-                    str(body.get("sync_mode") or DEFAULT_MSG_SYNC_MODE)
-                )
-            except ValueError as e:
-                return web.json_response({"error": str(e)}, status=400)
         save_accounts(accounts)
         return web.json_response({"ok": True})
 
@@ -253,6 +240,43 @@ class AdminWebApp:
             ordered.append(i)
         save_enabled_ids(ordered)
         return web.json_response({"ok": True, "enabled": ordered})
+
+    async def api_messages_summary(self, request: web.Request) -> web.Response:
+        bot = (request.rel_url.query.get("bot_wxid") or "").strip() or None
+        data = await query_summary(bot_wxid=bot)
+        data["msg_sync_mode"] = DEFAULT_MSG_SYNC_MODE
+        return web.json_response(data)
+
+    async def api_messages_list(self, request: web.Request) -> web.Response:
+        bot = (request.rel_url.query.get("bot_wxid") or "").strip() or None
+        peer = (request.rel_url.query.get("peer_wxid") or "").strip() or None
+        mt_raw = request.rel_url.query.get("msg_type")
+        msg_type: int | None
+        if mt_raw is None or str(mt_raw).strip() == "":
+            msg_type = None
+        else:
+            try:
+                msg_type = int(mt_raw)
+            except ValueError:
+                return web.json_response({"error": "msg_type 须为整数"}, status=400)
+        try:
+            limit = int(request.rel_url.query.get("limit", "50"))
+        except ValueError:
+            limit = 50
+        try:
+            offset = int(request.rel_url.query.get("offset", "0"))
+        except ValueError:
+            offset = 0
+        items, total = await query_list(
+            bot_wxid=bot,
+            msg_type=msg_type,
+            peer_wxid=peer,
+            limit=limit,
+            offset=offset,
+        )
+        return web.json_response(
+            {"items": items, "total": total, "msg_sync_mode": DEFAULT_MSG_SYNC_MODE}
+        )
 
 
 def create_app() -> web.Application:

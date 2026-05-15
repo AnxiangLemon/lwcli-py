@@ -11,7 +11,7 @@ _POLL_ALIASES = frozenset({"poll", "polling", "http", "longpoll", "long_poll"})
 _WS_ALIASES = frozenset({"websocket", "ws", "wss", "wssocket", "socket"})
 
 
-def normalize_sync_mode(raw: str | None, *, default: SyncMode = "poll") -> SyncMode:
+def normalize_sync_mode(raw: str | None, *, default: SyncMode = "websocket") -> SyncMode:
     """将用户/配置中的同步方式归一化为 poll 或 websocket。"""
     if not raw or not str(raw).strip():
         return default
