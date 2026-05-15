@@ -23,6 +23,7 @@ python run.py
 | `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址；`BotService` 创建 `LwApiClient` 时使用。 |
 | `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址。 |
 | `LWAPI_WEB_PORT` | `8090` | 运维台端口。 |
+| `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 用户自定义插件目录；可改为绝对路径，便于多项目共用一套插件。 |
 
 可在项目根目录放置 **`.env`**：`src/services/bot_service.py` 在导入时会执行 `load_dotenv()`。
 
@@ -40,13 +41,14 @@ python run.py
 ```text
 lwapi-py/
 ├── lwapi/                 # LwApi Python SDK（HTTP、登录、消息等）
+├── plugins/               # 消息插件目录（首层 lwplugin_*.py 自动注册）
 ├── src/
 │   ├── main.py            # Web 进程入口
 │   ├── account_loader.py  # accounts.json 读写 + account_slot_key
 │   ├── login_service.py   # 二次登录 + 二维码流式登录（依赖 Web emit）
 │   ├── message_handler.py # 消息回调入口 → 插件链
 │   ├── utils.py           # 日志、原子写 JSON、读日志尾等工具
-│   ├── plugins/           # 消息插件注册表、配置、builtin_* 实现
+│   ├── plugins/           # 插件框架：registry、chain、settings
 │   ├── runtime/           # 账号级 WebSocket 事件总线
 │   ├── services/          # bot_service、二维码渲染等
 │   └── web/               # aiohttp 路由与静态前端
@@ -56,6 +58,18 @@ lwapi-py/
 ├── requirements.txt
 └── README.md
 ```
+
+### 升级项目时如何保留自己的插件
+
+拉取或覆盖上游代码时，建议只动 **`src/`、`lwapi/`** 等框架目录，**保留** 下列路径即可无痛迁移业务：
+
+| 路径 | 说明 |
+|------|------|
+| `plugins/` | 你的 `lwplugin_*.py` 及子目录中的私有代码 |
+| `config/plugins.json` | 已启用插件 id 及执行顺序 |
+| `config/accounts.json` | 账号配置 |
+
+仓库自带的公共示例为 `plugins/lwplugin_demo_helper.py`、`plugins/lwplugin_debug_types.py`；升级时若你未改过这两个文件，可直接覆盖。业务插件请新建 **`lwplugin_` 前缀** 文件，或把私有代码放在 `plugins/` 子目录（不会被扫描）。
 
 ---
 
@@ -67,24 +81,28 @@ LwApi 消息同步会在一批数据到达时回调 **`composite_message_handler
 
 因此你要弄清两件事：
 
-1. **代码注册**：你的插件必须出现在 `registry.py` 的 `_ALL` 里，进程启动时 Python 已 import，运维台 `GET /api/plugins` 才能列出它。
+1. **代码发现**：在 **`plugins/`** 首层放置 **`lwplugin_*.py`**，进程启动时由 `registry` 扫描并注册，控制台会打印每个插件的 **id** 与 **名称**；运维台 `GET /api/plugins` 亦可列出（**无需改 `registry.py`**）。
 2. **运行启用**：`plugins.json` 的 `enabled` 里要包含你的 **`PLUGIN_ID`**，且顺序即执行顺序。
+
+公共示例：`plugins/lwplugin_demo_helper.py`（`demo_helper`）、`plugins/lwplugin_debug_types.py`（`debug_types`）。  
+`plugins/` **子目录**内的 `.py` **不会**被扫描，可存放你的其它业务代码，与插件注册隔离。
 
 ### 第一步：新建插件模块
 
-在 `src/plugins/` 下新建文件，例如 **`my_hello.py`**。每个插件模块通常包含四样**约定俗成**的元数据常量 + 一个异步入口函数 **`handle`**：
+在 **`plugins/`** 首层新建文件，文件名必须以 **`lwplugin_`** 开头，例如 **`lwplugin_my_hello.py`**（可参考 `plugins/_example.py` 复制改名）。每个插件模块需包含元数据常量 + 异步入口 **`handle`**：
 
 | 约定项 | 说明 |
 |--------|------|
-| `PLUGIN_ID` | **稳定唯一**字符串，写入 `plugins.json` 的 `enabled`；勿随意改名，否则已保存配置会失效。 |
-| `PLUGIN_TITLE` | 运维台展示用短标题。 |
-| `PLUGIN_DESCRIPTION` | 运维台展示用说明。 |
-| `async def handle(client, resp)` | 与 `MsgClient` 回调一致：第一个参数为 **`LwApiClient`**，第二个为 **`SyncMessageResponse`**（见 `lwapi.models.msg`）。 |
+| 文件名 | `plugins/lwplugin_<名称>.py`，仅扫描首层 |
+| `PLUGIN_ID` | **稳定唯一**字符串，写入 `plugins.json` 的 `enabled`；勿随意改名 |
+| `PLUGIN_TITLE` | 运维台展示用短标题 |
+| `PLUGIN_DESCRIPTION` | 运维台展示用说明 |
+| `async def handle(client, resp)` | 与 `MsgClient` 回调一致：第一个参数为 **`LwApiClient`**，第二个为 **`SyncMessageResponse`**（见 `lwapi.models.msg`） |
 
 **最小可用示例**（仅私聊文本里回复固定句，便于验证链路）：
 
 ```python
-# src/plugins/my_hello.py
+# plugins/lwplugin_my_hello.py
 from __future__ import annotations
 
 from loguru import logger
@@ -114,24 +132,11 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
             await client.msg.send_text_message(to_wxid=sender, content="插件已收到：测试")
 ```
 
-### 第二步：注册到 `registry.py`
+### 第二步：重启进程
 
-1. 在文件头部 **import** 你的模块，例如：  
-   `from src.plugins.my_hello import PLUGIN_DESCRIPTION as _HELLO_DESC, PLUGIN_ID as _HELLO_ID, PLUGIN_TITLE as _HELLO_TITLE, handle as _hello_handle`
-2. 在 `_ALL` 元组中追加一个 **`PluginSpec`**：
+**新增、删除或重命名** `plugins/lwplugin_*.py`，或修改插件 **Python 代码** 后，必须 **重启 `python run.py`**，注册表才会重新扫描并在控制台打印插件列表。仅靠改 `plugins.json` **不能**让「尚未被加载过的新文件」生效。
 
-```python
-PluginSpec(
-    id=_HELLO_ID,
-    title=_HELLO_TITLE,
-    description=_HELLO_DESC,
-    handle=_hello_handle,
-    version="0.1.0",
-    author="你的名字",
-),
-```
-
-**重要**：修改 `registry.py` 或**新增/重命名插件文件**后，必须 **重启 `python run.py` 进程**，Python 才会重新加载模块；仅靠改 `plugins.json` **不能**让「从未 import 过的新文件」生效。
+私有代码可放在 `plugins/` 子目录（如 `plugins/mybiz/helper.py`），**不会**参与插件注册。以 `_` 开头的文件（如 `_example.py`）仅作模板，**不会**被加载。
 
 ### 第三步：启用插件
 
@@ -144,8 +149,8 @@ PluginSpec(
 
 ### 第四步：验证
 
-1. 重启进程（若刚改过 `registry.py`）。
-2. 确认 `plugins.json` 里包含你的 id。
+1. 重启进程（若刚新增或修改了 `plugins/` 下的文件）。
+2. 在运维台「插件管理」确认列表中出现你的插件，且 `plugins.json` 的 `enabled` 包含对应 id。
 3. 启动对应账号机器人，私聊发送「测试」，观察日志与是否收到回复。
 
 ---
@@ -159,17 +164,17 @@ PluginSpec(
 ### 2. `resp.addMsgs` 与消息类型
 
 - `SyncMessageResponse.addMsgs` 是一批新消息，可能为空；建议写 **`for msg in resp.addMsgs or []:`**。
-- 常见 **`msg.msgType == 1`** 为普通文本；图片、语音、系统消息等类型请参考 `builtin_debug_types.py` 或 LwApi 文档，**不要假设全是文本**。
+- 常见 **`msg.msgType == 1`** 为普通文本；图片、语音、系统消息等类型请参考 `plugins/lwplugin_debug_types.py` 或 LwApi 文档，**不要假设全是文本**。
 - **`msg.content.string`**、**`msg.fromUserName.string`** 在模型里可能为 `None`，使用前建议 **`or ""`**，避免 `AttributeError`。
 
 ### 3. 私聊与群聊
 
 - **私聊**：`fromUserName` 多为对方 wxid；发消息时 **`to_wxid`** 常用该 sender。
-- **群聊**：`fromUserName` 常为 **`xxx@chatroom`**；正文里常带 **`发言者wxid:\n正文`** 前缀，需要自己拆分或参考 `builtin_text_helper.py` 的做法。若不想在群里误触自动回复，应加 **@机器人**、**固定前缀** 或关键词白名单等策略。
+- **群聊**：`fromUserName` 常为 **`xxx@chatroom`**；正文里常带 **`发言者wxid:\n正文`** 前缀，需要自己拆分或参考 `plugins/lwplugin_demo_helper.py` 的做法。若不想在群里误触自动回复，应加 **@机器人**、**固定前缀** 或关键词白名单等策略。
 
 ### 4. 避免「自己回自己」环路
 
-同步下来的消息里可能包含**自己刚发出的消息**的回显。若插件对「包含某关键词」就自动回复，容易形成循环。应对 **`fromUserName`** 与当前 **`client.wxid`** 做判断，或忽略明显由本号发出的同步（具体字段以你抓包为准）；内置 `text_helper` 文档中也强调了类似防护思路。
+同步下来的消息里可能包含**自己刚发出的消息**的回显。若插件对「包含某关键词」就自动回复，容易形成循环。应对 **`fromUserName`** 与当前 **`client.wxid`** 做判断，或忽略明显由本号发出的同步（具体字段以你抓包为准）；内置 `demo_helper` 文档中也强调了类似防护思路。
 
 ### 5. 性能与异步
 
@@ -180,11 +185,11 @@ PluginSpec(
 | 操作 | 是否需要重启进程 |
 |------|------------------|
 | 只改 `config/plugins.json` 的 `enabled` 或顺序 | **一般不需要**（依赖 mtime 缓存失效后下一轮消息生效）。 |
-| 改插件 **Python 代码**、改 **`registry.py`**、**新增插件文件** | **需要重启**。 |
+| 改 `plugins/` 下插件代码，或新增/删除插件文件 | **需要重启**。 |
 
 ### 7. 与内置插件对照学习
 
-建议阅读顺序：`builtin_demo_replies.py`（最小闭环）→ `builtin_debug_types.py`（类型过滤）→ `builtin_text_helper.py`（群聊、字段、防环路）。发送接口参数还可对照 `lwapi/models/msg_requests.py` 。
+建议阅读顺序：`plugins/_example.py`（最小私聊回复模板）→ `plugins/lwplugin_debug_types.py`（日志字段）→ `plugins/lwplugin_demo_helper.py`（群聊命令、防环路）。发送接口参数还可对照 `lwapi/models/msg_requests.py` 。
 
 ---
 

@@ -1,6 +1,5 @@
 {
   "enabled": [
-    "debug_types",
-    "demo_helper"
+    "my_hello"
   ]
 }

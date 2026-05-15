@@ -14,7 +14,7 @@ from typing import List
 from src.utils import atomic_write_json, logger
 
 PLUGIN_CONFIG = Path("config/plugins.json")
-DEFAULT_ENABLED = ["demo_replies"]
+DEFAULT_ENABLED = ["demo_helper", "debug_types"]
 
 _mtime: float | None = None
 _cached_enabled: List[str] | None = None
