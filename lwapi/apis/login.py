@@ -1,5 +1,6 @@
 # lwapi/apis/login.py
 import asyncio
+import time
 from enum import IntEnum
 from typing import Optional, Dict, Any, Tuple, AsyncIterator
 
@@ -65,6 +66,10 @@ class LoginClient:
         # 心跳任务控制（支持无限次启停）
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._stop_heartbeat = asyncio.Event()
+
+        # 缓存刷新：定时 SecAutoAuth、Reportclientcheck（与心跳同级的启停模型）
+        self._maint_task: Optional[asyncio.Task] = None
+        self._stop_maint = asyncio.Event()
 
     # ==================== 二维码登录 ====================
     async def get_qr_code(
@@ -383,18 +388,97 @@ class LoginClient:
             self._heartbeat_task.cancel()
             logger.info("正在停止心跳任务...")
 
+    async def _maint_worker(self, sec_interval: int, report_interval: int) -> None:
+        """按固定周期二次登录、环境上报；与 `_heartbeat_worker` 一样可被 cancel/stop。"""
+        self._stop_maint.clear()
+        next_sec = time.monotonic() + sec_interval
+        next_report = time.monotonic() + report_interval
+        try:
+            while not self._stop_maint.is_set():
+                now = time.monotonic()
+                if now >= next_sec:
+                    await self.sec_auto_login()
+                    next_sec = time.monotonic() + sec_interval
+                    continue
+                if now >= next_report:
+                    await self.report_client_check()
+                    next_report = time.monotonic() + report_interval
+                    continue
+                deadline = min(next_sec, next_report)
+                wait = deadline - now
+                if wait <= 0:
+                    continue
+                try:
+                    await asyncio.wait_for(
+                        self._stop_maint.wait(), timeout=min(60.0, wait)
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    continue
+        except asyncio.CancelledError:
+            logger.info("缓存刷新任务正常取消")
+            raise
+        finally:
+            logger.info("缓存刷新任务已彻底结束")
+
+    def start_keepalive(
+        self,
+        *,
+        sec_interval: int = 4 * 3600,
+        report_interval: int = 24 * 3600,
+    ) -> None:
+        """登录成功后启动：每隔 sec_interval 调用 SecAutoAuth，每隔 report_interval 调用 Reportclientcheck。"""
+        self.stop_keepalive()
+        sec_interval = max(3600, sec_interval)
+        report_interval = max(3600, report_interval)
+        self._maint_task = asyncio.create_task(
+            self._maint_worker(sec_interval, report_interval),
+            name="LoginClient-KeepAlive",
+        )
+        logger.success(
+            f"环境刷新（SecAutoAuth 每 {sec_interval}s，Reportclientcheck 每 {report_interval}s）"
+        )
+
+    def stop_keepalive(self) -> None:
+        """立即停止缓存刷新任务（安全、可重复调用）。"""
+        if self._stop_maint.is_set():
+            return
+        self._stop_maint.set()
+        if self._maint_task and not self._maint_task.done():
+            self._maint_task.cancel()
+            logger.info("正在停止缓存刷新任务...")
+
+    async def join_background_tasks(self) -> None:
+        """
+        停止并等待心跳、缓存刷新任务完全结束（关闭 transport 或账号退出前应调用）。
+        """
+        self.stop_heartbeat()
+        self.stop_keepalive()
+        for t in (self._heartbeat_task, self._maint_task):
+            if t and not t.done():
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+
     # ==================== 其他登录相关接口 ====================
     async def logout(self) -> bool:
-        """退出登录并停止心跳。"""
-        self.stop_heartbeat()
+        """退出登录并停止心跳、缓存刷新等后台任务。"""
+        await self.join_background_tasks()
         await self.t.post("/Login/LogOut")
         return True
 
     async def sec_auto_login(self) -> bool:
         try:
-            await self.t.post("/Login/SecAutoAuth")
-            # 这里先按接口 code==200 视为成功，后续可按业务字段再做更细判断。
-            logger.success("二次免扫码登录成功")
+            payload: dict =  await self.t.post("/Login/SecAutoAuth")
+            ret, err_msg = _extract_ret_errmsg(payload)
+           # logger.debug(f"SecAutoAuth response: ret={ret}, errMsg={err_msg}, data={payload}")
+            if ret != 0:
+                logger.error(f"二次免扫码登录失败: ret={ret}, msg={err_msg or '未知错误'}")
+                return False
+            
+            
+            logger.success("二次免扫码登录成功？")
             return True
         except (ApiError, HttpError) as e:
             logger.error(f"二次登录失败: {e}")
@@ -428,7 +512,7 @@ class LoginClient:
             return False
 
     async def long_link_remove(self) -> bool:
-        self.stop_heartbeat()
+        await self.join_background_tasks()
         try:
             await self.t.post("/Login/LongRemove")
             logger.success("长连接已断开")

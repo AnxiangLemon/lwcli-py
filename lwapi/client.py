@@ -68,8 +68,10 @@ class LwApiClient:
         if hasattr(self.msg, "wait_stop"):
             await self.msg.wait_stop()
 
-        # 先停止后台心跳，避免关闭连接池后还有请求在跑。
-        if hasattr(self.login, "stop_heartbeat"):
+        # 停止心跳、缓存刷新等后台任务并等待结束，避免关闭连接池后仍有请求。
+        if hasattr(self.login, "join_background_tasks"):
+            await self.login.join_background_tasks()
+        elif hasattr(self.login, "stop_heartbeat"):
             self.login.stop_heartbeat()
 
         # 统一通过 transport 的关闭方法释放底层连接池。

@@ -4,8 +4,10 @@
 职责概要：
 - 使用 account_slot_key 作为任务字典键（备注+device_id），避免 device_id 重复时冲突；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
-- 登录成功后启动心跳与消息轮询，消息处理委托给 message_handler.default_message_handler
-  （其内部为可配置的插件链）。
+- 登录成功后启动心跳、LoginClient 内缓存刷新任务（默认每 4h SecAutoAuth、每 24h Reportclientcheck）、
+  以及登录后立即一次环境上报；消息处理委托给 message_handler.default_message_handler。
+- 任务取消或 `LwApiClient` 退出时：`aclose` 会依次停止消息轮询并 `join_background_tasks`，
+  使心跳与缓存刷新协程完全结束后再关闭连接。
 
 注意：若构造本类时不传入 account_events，则二维码登录无法推送界面（emit 为空会失败），
 正常 Web 入口应始终注入 EventHub。
@@ -29,6 +31,14 @@ from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
 load_dotenv()
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    try:
+        v = int(os.getenv(name, str(default)))
+    except ValueError:
+        v = default
+    return max(minimum, v)
 
 
 class BotService:
@@ -131,6 +141,28 @@ class BotService:
                             await emit({"event": "login_saved", "wxid": wxid})
 
                         client.login.start_heartbeat(interval=20)
+                        sec_iv = _env_int(
+                            "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
+                            4 * 3600,
+                            300,
+                        )
+                        report_iv = _env_int(
+                            "LWAPI_REPORT_CLIENT_CHECK_INTERVAL_SECONDS",
+                            24 * 3600,
+                            3600,
+                        )
+                        client.login.start_keepalive(
+                            sec_interval=sec_iv,
+                            report_interval=report_iv,
+                        )
+                        if await client.login.report_client_check():
+                            bot_logger.info(
+                                f"【{remark}】客户端环境已上报（Reportclientcheck）"
+                            )
+                        else:
+                            bot_logger.warning(
+                                f"【{remark}】Reportclientcheck 未成功，将继续运行"
+                            )
                         client.msg.start(handler=default_message_handler)
                         bot_logger.success(f"【{remark}】机器人已上线，wxid={wxid}")
                         if self._events:
@@ -142,8 +174,8 @@ class BotService:
                                 }
                             )
 
-                        while True:
-                            await asyncio.sleep(60)
+                        hold = asyncio.get_running_loop().create_future()
+                        await hold
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:

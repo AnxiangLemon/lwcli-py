@@ -70,8 +70,6 @@ class MsgClient:
                 resp = await self._sync_once()
 
                 if resp.addMsgs:
-                    logger.info(f"收到 {len(resp.addMsgs)} 条新消息")
-                    
                     # 统一向回调注入 client，处理器里可以直接调发消息等接口。
                     if self._handler and self.client:
                         try:
