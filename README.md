@@ -14,7 +14,7 @@ pip install -r requirements.txt
 python run.py
 ```
 
-默认运维台监听 **`0.0.0.0:8090`**，浏览器打开终端打印的地址（本机一般为 `http://127.0.0.1:8090`）。启动机器人做扫码登录前，**请先打开对应账号页面并保持 WebSocket 连接**，否则界面收不到二维码（见下文「扫码与 WebSocket」）。
+默认运维台监听 **`0.0.0.0:26121`**，浏览器打开终端打印的地址（本机一般为 `http://127.0.0.1:26121`）。启动机器人做扫码登录前，**请先打开对应账号页面并保持 WebSocket 连接**，否则界面收不到二维码（见下文「扫码与 WebSocket」）。
 
 ### 环境变量
 
@@ -22,7 +22,7 @@ python run.py
 |------|--------|------|
 | `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址；`BotService` 创建 `LwApiClient` 时使用。 |
 | `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址。 |
-| `LWAPI_WEB_PORT` | `8090` | 运维台端口。 |
+| `LWAPI_WEB_PORT` | `26121` | 运维台端口。 |
 | `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 用户自定义插件目录；可改为绝对路径，便于多项目共用一套插件。 |
 
 可在项目根目录放置 **`.env`**：`src/services/bot_service.py` 在导入时会执行 `load_dotenv()`。

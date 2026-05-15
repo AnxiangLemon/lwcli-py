@@ -19,7 +19,7 @@ logger = setup_logger("main")
 
 # 环境变量默认值常量（便于统一维护）
 DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8090
+DEFAULT_PORT = 26121
 ENV_HOST_KEY = "LWAPI_WEB_HOST"
 ENV_PORT_KEY = "LWAPI_WEB_PORT"
 
