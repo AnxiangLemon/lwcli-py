@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable, Optional, Tuple
 
-from lwapi.apis.login import LoginError
+from lwapi.exceptions import LoginError
 from lwapi.models.login import ProxyInfo
 
 from .services.qr_render import weixin_qr_png_base64, weixin_scan_url

@@ -2,6 +2,8 @@
 
 面向 **LwApi** 的 Python 项目：提供异步 **`lwapi/` SDK**，以及 **`src/`** 下的 aiohttp **Web 运维台**（多账号、扫码登录、插件链、消息入库与日志）。
 
+**许可**：MIT，见 [LICENSE](LICENSE)。
+
 **本文档以插件开发者为主**：如何发现/启用插件、处理消息、在不上线消息时主动发信、以及生命周期钩子。运维与打包见文末附录。
 
 ---
@@ -277,7 +279,7 @@ await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
 | 变量 | 默认值 | 含义 |
 |------|--------|------|
 | `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址 |
-| `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址 |
+| `LWAPI_WEB_HOST` | `127.0.0.1` | 运维台监听地址（仅本机；需局域网访问见下文「安全」） |
 | `LWAPI_WEB_PORT` | `26121` | 运维台端口 |
 | `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 插件目录 |
 | `LWAPI_MSG_SYNC_MODE` | `websocket` | 消息同步：`websocket` 或 `http` |
@@ -286,6 +288,23 @@ await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
 项目根 `.env` 会在 `bot_service` 导入时由 `load_dotenv()` 加载。
 
 **扫码登录**：启动机器人前请先打开该账号页面并保持 **WebSocket**（`/ws/account/{idx}`），否则界面收不到二维码。
+
+**安装依赖**：`pip install -r requirements.txt`（与 `pyproject.toml` 中依赖一致；也可 `pip install .` 安装本包）。
+
+---
+
+## 附录 A2：安全说明（部署前必读）
+
+运维台 **未内置登录或 Token 鉴权**。任何能访问监听地址的客户端均可：查看/修改账号、启停机器人、发送消息、修改插件、清空消息库。
+
+| 风险 | 说明 |
+|------|------|
+| 默认仅本机 | `LWAPI_WEB_HOST` 默认为 `127.0.0.1`，仅本机浏览器可访问。 |
+| 暴露到局域网/公网 | 若改为 `0.0.0.0` 或公网 IP，务必配合防火墙、VPN 或反向代理 + 鉴权。 |
+| 敏感数据 | `config/accounts.json`（含 device_id、wxid、代理）、`config/messages.sqlite`、`logs/` 含业务与聊天相关内容，请限制文件权限并定期备份。 |
+| 插件代码 | `plugins/lwplugin_*.py` 在进程内以完整 Python 权限执行，仅放置可信代码。 |
+
+生产环境建议：保持 `127.0.0.1`；远程管理用 SSH 隧道或带认证的反向代理，不要直接把运维台端口暴露到公网。
 
 ---
 

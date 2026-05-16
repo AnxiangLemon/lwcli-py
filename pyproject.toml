@@ -3,17 +3,22 @@ name = "lwapi-py"
 version = "0.1.0"
 description = "Lightweight Python SDK for LwApi (Weixin4.0)"
 authors = [
-    {name = "AnxiangLemon",email = "AnxiangLemon@163.com"}
+    {name = "AnxiangLemon", email = "AnxiangLemon@163.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.9"
+license = {text = "MIT"}
 dependencies = [
+    "loguru",
+    "qrcode[pil]",
+    "Pillow",
+    "pydantic>=2.0",
+    "python-dotenv",
+    "aiohttp",
+    "httpx",
+    "tzdata",
 ]
-
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-

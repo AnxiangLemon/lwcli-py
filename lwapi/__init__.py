@@ -5,7 +5,7 @@ lwapi SDK 对外统一入口。
 
 from .client import LwApiClient
 from .config import ClientConfig
-from .exceptions import ApiError, HttpError, LwApiError
+from .exceptions import ApiError, HttpError, LoginError, LwApiError
 from .models.msg_requests import (
     MsgRequestBody,
     RevokeMsgParam,
@@ -22,6 +22,7 @@ __all__ = [
     "LwApiError",
     "HttpError",
     "ApiError",
+    "LoginError",
     "MsgRequestBody",
     "SendNewMsgParam",
     "SendImageMsgParam",

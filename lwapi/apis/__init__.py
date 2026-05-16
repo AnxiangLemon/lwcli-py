@@ -9,7 +9,8 @@ from .finder import FinderClient
 from .friend import FriendClient
 from .group import GroupClient
 from .label import LabelClient
-from .login import LoginClient, LoginError, QRStatus
+from ..exceptions import LoginError
+from .login import LoginClient, QRStatus
 from .mmsns import MmSnsClient
 from .msg import MsgClient
 from .official import OfficialClient

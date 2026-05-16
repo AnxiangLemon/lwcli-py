@@ -9,19 +9,13 @@ from httpx import ConnectError, NetworkError, TimeoutException
 from loguru import logger
 
 from ..transport import AsyncHTTPTransport
-from ..exceptions import ApiError, HttpError, is_wrapped_request_timeout
+from ..exceptions import ApiError, HttpError, LoginError, is_wrapped_request_timeout
 from ..models.login import (
     QRGetRequest,
     QRGetResponse,
     QRCheckResponse,
     ProxyInfo,
 )
-
-
-class LoginError(Exception):
-    """登录模块专用业务异常"""
-
-    pass
 
 
 class QRStatus(IntEnum):

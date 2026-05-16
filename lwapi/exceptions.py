@@ -26,7 +26,10 @@ class ApiError(Exception):
         self.message = message
         super().__init__(f"API [{code}]: {message}")
 
-# 可以扩展其他异常，如 LoginError(ApiError): ...
-class LoginError(ApiError):
-    """登录专用异常"""
-    pass
+class LoginError(LwApiError):
+    """登录流程异常（扫码、二次登录、运维台 emit 等）。"""
+
+    def __init__(self, message: str, code: int = 0) -> None:
+        self.message = message
+        self.code = code
+        super().__init__(message)
