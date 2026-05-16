@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,55 @@ _ACCOUNT_FILE_SINKS: set[str] = set()
 log_account_ctx: ContextVar[Optional[str]] = ContextVar("log_account", default=None)
 
 ACCOUNT_LOG_EXTRA_KEY = "account"
+
+_LOG_ENV_LOADED = False
+_VALID_LEVELS = frozenset(
+    {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}
+)
+
+
+def _ensure_log_env() -> None:
+    global _LOG_ENV_LOADED
+    if _LOG_ENV_LOADED:
+        return
+    try:
+        from dotenv import load_dotenv
+
+        from src.app_paths import env_file
+
+        load_dotenv(env_file())
+    except Exception:
+        pass
+    _LOG_ENV_LOADED = True
+
+
+def _normalize_level(raw: str, default: str) -> str:
+    v = (raw or "").strip().upper()
+    return v if v in _VALID_LEVELS else default
+
+
+def log_console_level() -> str:
+    """控制台日志级别，默认跟随 LWAPI_LOG_LEVEL。"""
+    _ensure_log_env()
+    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "DEBUG")
+    return _normalize_level(os.getenv("LWAPI_LOG_CONSOLE_LEVEL", ""), base)
+
+
+def log_file_level() -> str:
+    """按账号文件日志级别，默认跟随 LWAPI_LOG_LEVEL。"""
+    _ensure_log_env()
+    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "DEBUG")
+    return _normalize_level(os.getenv("LWAPI_LOG_FILE_LEVEL", ""), base)
+
+
+def log_rotation() -> str:
+    _ensure_log_env()
+    return (os.getenv("LWAPI_LOG_ROTATION", "10 MB") or "10 MB").strip()
+
+
+def log_retention() -> str:
+    _ensure_log_env()
+    return (os.getenv("LWAPI_LOG_RETENTION", "7 days") or "7 days").strip()
 
 
 def effective_account_remark(acc: dict) -> str:
@@ -51,7 +101,7 @@ def setup_logger(name: str = "bot"):
         logger.remove()
         logger.add(
             sink=lambda msg: print(msg, end=""),
-            level="DEBUG",
+            level=log_console_level(),
             colorize=True,
         )
         _LOGGER_INITIALIZED = True
@@ -67,9 +117,9 @@ def setup_logger(name: str = "bot"):
         _ACCOUNT_FILE_SINKS.add(account_key)
         logger.add(
             LOG_DIR / f"{account_key}_{{time:YYYY-MM-DD}}.log",
-            rotation="10 MB",
-            retention="7 days",
-            level="DEBUG",
+            rotation=log_rotation(),
+            retention=log_retention(),
+            level=log_file_level(),
             encoding="utf-8",
             filter=_only_this_account,
         )

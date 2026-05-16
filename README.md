@@ -285,8 +285,17 @@ await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
 | `LWAPI_MSG_SYNC_MODE` | `websocket` | 消息同步：`websocket` 或 `http` |
 | `LWAPI_OPEN_BROWSER` | 未设置 | 设为 `1`/`true` 时启动后打开浏览器 |
 | `LWAPI_WEB_TOKEN` | `123123` | 运维台登录 Token；**留空则关闭鉴权** |
+| `LWAPI_LOG_LEVEL` | `DEBUG` | 日志级别（同时作用于控制台与文件，可被下面两项覆盖） |
+| `LWAPI_LOG_CONSOLE_LEVEL` | 同 `LWAPI_LOG_LEVEL` | 仅控制台 |
+| `LWAPI_LOG_FILE_LEVEL` | 同 `LWAPI_LOG_LEVEL` | 仅 `logs/{备注}_日期.log` |
+| `LWAPI_LOG_ROTATION` | `10 MB` | 单日志文件轮转大小 |
+| `LWAPI_LOG_RETENTION` | `7 days` | 日志保留时间 |
 
-项目根 `.env` 会在 `bot_service` 导入时由 `load_dotenv()` 加载。
+可选级别：`TRACE` `DEBUG` `INFO` `SUCCESS` `WARNING` `ERROR` `CRITICAL`（loguru 语义）。
+
+项目根 `.env` 会在 `bot_service` 导入时由 `load_dotenv()` 加载；修改日志级别后需**重启进程**生效。
+
+**正式上线建议**：`LWAPI_LOG_LEVEL=INFO`（或 `WARNING`）；需要查某账号问题时临时改为 `DEBUG`，复现后在运维台「日志」页查看 `logs/` 下对应文件。
 
 **扫码登录**：启动机器人前请先打开该账号页面并保持 **WebSocket**（`/ws/account/{idx}`），否则界面收不到二维码。
 
