@@ -38,6 +38,10 @@ from ..models.msg_requests import (
 
 MessageHandler = Callable[["LwApiClient", SyncMessageResponse], Awaitable[None]]
 
+# 心跳与底层读超时：网络半开时 async for 可能一直阻塞，需靠 sock_read + 心跳触发重连
+_WS_HEARTBEAT_SEC = 30
+_WS_SOCK_READ_TIMEOUT_SEC = 90
+
 
 class MsgClient:
     def __init__(self, transport: AsyncHTTPTransport):
@@ -151,17 +155,28 @@ class MsgClient:
         while not self._stop_event.is_set():
             session: Optional[aiohttp.ClientSession] = None
             try:
-                session = aiohttp.ClientSession()
+                timeout = aiohttp.ClientTimeout(sock_read=_WS_SOCK_READ_TIMEOUT_SEC)
+                session = aiohttp.ClientSession(timeout=timeout)
                 self._ws_session = session
                 async with session.ws_connect(
                     ws_url,
-                    heartbeat=30,
+                    heartbeat=_WS_HEARTBEAT_SEC,
                     receive_timeout=None,
                 ) as ws:
                     reconnect_delay = 2.0
-                    async for msg in ws:
-                        if self._stop_event.is_set():
+                    logger.info(f"WebSocket 已连接 (wxid={wxid})")
+                    while not self._stop_event.is_set():
+                        try:
+                            msg = await ws.receive()
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                f"WebSocket 读超时（>{_WS_SOCK_READ_TIMEOUT_SEC}s 无数据），将重连"
+                            )
                             break
+                        except aiohttp.ClientError as e:
+                            logger.warning(f"WebSocket 读取异常: {e}，将重连")
+                            break
+
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             resp = self._parse_sync_payload(msg.data)
                             if resp:
@@ -170,16 +185,26 @@ class MsgClient:
                             resp = self._parse_sync_payload(msg.data)
                             if resp:
                                 await self._dispatch_sync(resp)
-                        elif msg.type in (
-                            aiohttp.WSMsgType.CLOSED,
-                            aiohttp.WSMsgType.ERROR,
-                        ):
+                        elif msg.type == aiohttp.WSMsgType.CLOSE:
+                            code = msg.data
+                            extra = f", code={code}" if code is not None else ""
+                            logger.warning(f"WebSocket 收到关闭帧{extra}，将重连")
+                            break
+                        elif msg.type == aiohttp.WSMsgType.CLOSED:
+                            exc = ws.exception()
+                            detail = f": {exc}" if exc else ""
+                            logger.warning(f"WebSocket 连接已关闭{detail}，将重连")
+                            break
+                        elif msg.type == aiohttp.WSMsgType.ERROR:
+                            exc = ws.exception()
+                            detail = f": {exc}" if exc else ""
+                            logger.warning(f"WebSocket 连接错误{detail}，将重连")
                             break
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 if not self._stop_event.is_set():
-                    logger.warning(f"WebSocket 连接异常: {e}")
+                    logger.warning(f"WebSocket 连接异常: {e}，将重连")
             finally:
                 if session is not None and not session.closed:
                     await session.close()
@@ -188,6 +213,7 @@ class MsgClient:
 
             if self._stop_event.is_set():
                 break
+            logger.info(f"WebSocket 将在 {reconnect_delay:.0f}s 后重连 (wxid={wxid})")
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 1.5, 30.0)
 
