@@ -429,7 +429,7 @@ class LoginClient:
     ) -> None:
         """登录成功后启动：每隔 sec_interval 调用 SecAutoAuth，每隔 report_interval 调用 Reportclientcheck。"""
         self.stop_keepalive()
-        sec_interval = 1800 #max(3600, sec_interval)
+        sec_interval = max(3600, sec_interval)
         report_interval = max(3600, report_interval)
         self._maint_task = asyncio.create_task(
             self._maint_worker(sec_interval, report_interval),
