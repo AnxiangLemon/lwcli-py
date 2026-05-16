@@ -31,13 +31,13 @@ PLUGIN_AUTHOR = "LWAPI"
 BOT_WXID = ""
 
 # 主动发送、上线欢迎等的目标 wxid（可填 filehelper）
-TO_WXID = "filehelper"
+TO_WXID = ""
 
 # on_app_ready：进程启动后延迟多少秒再尝试主动发送
 APP_READY_DELAY_SEC = 30
 
 # on_bot_online：上线后延迟多少秒再发欢迎消息
-ONLINE_WELCOME_DELAY_SEC = 5
+ONLINE_WELCOME_DELAY_SEC = 2
 
 # start_background：轮询间隔（秒）
 BACKGROUND_INTERVAL_SEC = 300
