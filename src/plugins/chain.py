@@ -2,7 +2,7 @@
 消息插件链的入口：按 config/plugins.json 中 enabled 顺序依次调用各插件的 handle。
 
 LwApi 在收到一批同步消息后回调此处；每个插件应自行 try/except 或依赖本模块
-统一捕获并打日志，避免单个插件异常中断后续插件。
+统一捕获并打日志，避免单个插件异常中断后续插件。若 handle 返回 False，则不再调用后续插件。
 """
 
 from __future__ import annotations
@@ -34,6 +34,10 @@ async def composite_message_handler(
         return
     for spec in specs:
         try:
-            await spec.handle(client, resp)
+            stop = await spec.handle(client, resp)
         except Exception:
             logger.exception(f"插件 [{spec.id}] 处理消息时异常")
+            continue
+        if stop is False:
+            logger.debug(f"插件 [{spec.id}] handle 返回 False，跳过后续插件")
+            break

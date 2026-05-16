@@ -5,5 +5,6 @@
 """
 
 from src.plugins.chain import composite_message_handler
+from src.plugins.types import HANDLE_STOP_CHAIN
 
-__all__ = ["composite_message_handler"]
+__all__ = ["composite_message_handler", "HANDLE_STOP_CHAIN"]

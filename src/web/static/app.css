@@ -882,6 +882,72 @@ html.theme-light .acc-qr-shell {
   gap: 18px;
 }
 
+.plugin-list--ordered {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.plugins-exec-chain {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(61, 214, 140, 0.22);
+  background: rgba(61, 214, 140, 0.06);
+}
+
+.plugins-exec-chain-label {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-dim);
+}
+
+.plugins-exec-chain-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.plugins-chain-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.plugins-chain-arrow {
+  color: var(--muted-dim);
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+.plugin-order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0d1a14;
+  background: linear-gradient(135deg, #3dd68c 0%, #7ee8b0 100%);
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(61, 214, 140, 0.35);
+}
+
+.plugin-card-top .plugin-order-badge {
+  margin-right: 2px;
+}
+
 @media (max-width: 480px) {
   .plugin-list {
     grid-template-columns: 1fr;

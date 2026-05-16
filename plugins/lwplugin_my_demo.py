@@ -49,13 +49,14 @@ def _filled(s: str) -> bool:
     return bool((s or "").strip())
 
 
-async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
+async def handle(client: LwApiClient, resp: SyncMessageResponse) -> bool | None:
     """1. 消息驱动：打印收到的消息。"""
     for msg in resp.addMsgs or []:
         content = (msg.content.string or "").strip()
         sender = (msg.fromUserName.string or "").strip()
         wxid = client.wxid
         logger.info(f"[{PLUGIN_ID}] wxid={wxid} 收到消息 from={sender} content={content}")
+    return None  # 不确定是否处理，继续让后续插件也有机会处理
 
 async def _active_send_demo() -> None:
     """2. 按 wxid 主动发送（require_client）。"""

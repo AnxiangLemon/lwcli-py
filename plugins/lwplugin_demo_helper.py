@@ -151,7 +151,7 @@ def _build_help_text(*, is_group: bool) -> str:
     return "\n".join(lines)
 
 
-async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
+async def handle(client: LwApiClient, resp: SyncMessageResponse) -> bool | None:
     wxid = client.wxid
     for msg in resp.addMsgs or []:
         if msg.msgType != 1:
@@ -195,3 +195,5 @@ async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
             elif speaker:
                 at_user = speaker
         await client.msg.send_text_message(to_wxid=target, content=reply, at=at_user)
+        return False  
+    return None 

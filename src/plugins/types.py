@@ -1,7 +1,8 @@
 """
 消息插件描述结构：每个插件有稳定 id、展示用标题/说明，以及异步 handle 入口。
 
-handle 签名与 LwApi MsgClient 回调一致：(LwApiClient, SyncMessageResponse) -> Awaitable[None]。
+handle 签名与 LwApi MsgClient 回调一致：(LwApiClient, SyncMessageResponse) -> Awaitable[bool | None]。
+返回 False 时不再调用后续插件；返回 None 或 True 时继续。
 
 可选生命周期（在 lwplugin_*.py 中按需定义）：
 - on_app_ready()：Web 进程启动后调用一次（可在此 asyncio.create_task / sleep 后执行业务）
@@ -14,7 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
-MessageHandler = Callable[..., Awaitable[None]]
+# 在 handle 中 return False（或 HANDLE_STOP_CHAIN）可中断后续插件
+HANDLE_STOP_CHAIN = False
+
+MessageHandler = Callable[..., Awaitable[bool | None]]
 AppReadyHandler = Callable[[], Awaitable[None]]
 BotOnlineHandler = Callable[..., Awaitable[None]]
 BotOfflineHandler = Callable[..., Awaitable[None]]

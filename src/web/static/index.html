@@ -183,10 +183,14 @@
     <section id="view-plugins" class="view-panel" aria-label="插件管理">
       <div class="card">
         <h2>插件列表</h2>
-        <p class="subtitle" style="margin-top:0;margin-bottom:14px;color:var(--muted-dim)">
-          执行顺序为下列从上到下的顺序（与勾选先后无关）。
+        <p class="subtitle" style="margin-top:0;margin-bottom:10px;color:var(--muted-dim)">
+          已启用插件按下列从上到下依次处理消息；可用 ↑↓ 调整顺序。插件 <code>handle</code> 返回 <code>False</code> 时不再执行后续插件。
         </p>
-        <div id="plugins-list" class="plugin-list">加载中…</div>
+        <div id="plugins-exec-chain" class="plugins-exec-chain" hidden>
+          <p class="plugins-exec-chain-label">当前执行链</p>
+          <div id="plugins-exec-chain-flow" class="plugins-exec-chain-flow"></div>
+        </div>
+        <div id="plugins-list" class="plugin-list plugin-list--ordered">加载中…</div>
       </div>
     </section>
 
@@ -1004,18 +1008,92 @@
       return '发送失败';
     }
 
-    function buildPluginCardHtml(p, on) {
+    function sortPluginsForDisplay(catalog, enabledIds) {
+      var enabledSet = new Set(enabledIds || []);
+      var byId = {};
+      (catalog || []).forEach(function (p) {
+        byId[p.id] = p;
+      });
+      var ordered = [];
+      (enabledIds || []).forEach(function (id) {
+        if (byId[id]) ordered.push(byId[id]);
+      });
+      (catalog || []).forEach(function (p) {
+        if (!enabledSet.has(p.id)) ordered.push(p);
+      });
+      return ordered;
+    }
+
+    function refreshPluginOrderUi() {
+      var host = document.getElementById('plugins-list');
+      if (!host) return;
+      var enabledCards = host.querySelectorAll('.plugin-card.is-enabled');
+      var total = enabledCards.length;
+      enabledCards.forEach(function (card, i) {
+        var n = i + 1;
+        var badge = card.querySelector('.plugin-order-badge');
+        if (badge) badge.textContent = String(n);
+        var up = card.querySelector('.plugin-icon-btn[data-move="-1"]');
+        var down = card.querySelector('.plugin-icon-btn[data-move="1"]');
+        if (up) up.disabled = n === 1;
+        if (down) down.disabled = n === total;
+      });
+      var chainWrap = document.getElementById('plugins-exec-chain');
+      var flow = document.getElementById('plugins-exec-chain-flow');
+      if (!chainWrap || !flow) return;
+      if (!total) {
+        chainWrap.hidden = true;
+        flow.innerHTML = '';
+        return;
+      }
+      chainWrap.hidden = false;
+      var parts = [];
+      enabledCards.forEach(function (card, i) {
+        if (i > 0) parts.push('<span class="plugins-chain-arrow" aria-hidden="true">→</span>');
+        var titleEl = card.querySelector('.plugin-card-title');
+        var id = card.getAttribute('data-plugin-id') || '';
+        var label = titleEl ? titleEl.textContent : id;
+        parts.push(
+          '<span class="plugins-chain-step"><span class="plugin-order-badge">' +
+            (i + 1) +
+            '</span> ' +
+            esc(label) +
+            '</span>'
+        );
+      });
+      flow.innerHTML = parts.join('');
+    }
+
+    function buildPluginCardHtml(p, on, orderIndex) {
       var author = (p.author && String(p.author).trim()) || 'LWAPI';
       var vs = fmtPluginVersion(p.version);
       var pid = esc(p.id);
+      var orderBadge =
+        on && orderIndex != null
+          ? '<span class="plugin-order-badge" title="执行顺序">' + orderIndex + '</span>'
+          : '';
+      var reorderBtns = '';
+      if (on) {
+        reorderBtns =
+          '<div class="plugin-card-actions">' +
+          '<button type="button" class="plugin-icon-btn" title="上移" data-move="-1" onclick="movePluginOrder(\'' +
+          pid +
+          '\', -1)">↑</button>' +
+          '<button type="button" class="plugin-icon-btn" title="下移" data-move="1" onclick="movePluginOrder(\'' +
+          pid +
+          '\', 1)">↓</button>' +
+          '</div>';
+      }
       return (
         '<article class="plugin-card' + (on ? ' is-enabled' : '') + '" data-plugin-id="' + pid + '">' +
         '<div class="plugin-card-top">' +
+        orderBadge +
         '<div class="plugin-card-icon" aria-hidden="true"></div>' +
         '<div class="plugin-card-head-text">' +
         '<h3 class="plugin-card-title">' + esc(p.title) + '</h3>' +
         '<p class="plugin-card-author"><code class="plugin-card-plugin-id">' + pid + '</code><span class="plugin-card-by"> · by ' + esc(author) + '</span></p></div>' +
         '<span class="plugin-card-status ' + (on ? 'is-on' : 'is-off') + '">' + (on ? '运行中' : '未运行') + '</span>' +
+        reorderBtns +
         '</div>' +
         '<p class="plugin-card-desc">' + esc(p.description || '') + '</p>' +
         '<div class="plugin-card-bottom">' +
@@ -1032,11 +1110,11 @@
 
     async function persistPlugins() {
       var ordered = [];
-      _pluginCatalog.forEach(function (p) {
-        var card = document.querySelector('.plugin-card[data-plugin-id="' + p.id + '"]');
-        if (!card) return;
+      var host = document.getElementById('plugins-list');
+      if (!host) return;
+      host.querySelectorAll('.plugin-card').forEach(function (card) {
         var cb = card.querySelector('input.plugin-enable');
-        if (cb && cb.checked) ordered.push(p.id);
+        if (cb && cb.checked) ordered.push(card.getAttribute('data-plugin-id'));
       });
       await fetchJson('/api/plugins', {
         method: 'PUT',
@@ -1045,16 +1123,57 @@
       });
     }
 
+    async function movePluginOrder(id, delta) {
+      var host = document.getElementById('plugins-list');
+      if (!host) return;
+      var enabledCards = Array.prototype.slice.call(host.querySelectorAll('.plugin-card.is-enabled'));
+      var i = enabledCards.findIndex(function (c) {
+        return c.getAttribute('data-plugin-id') === id;
+      });
+      if (i < 0) return;
+      var j = i + delta;
+      if (j < 0 || j >= enabledCards.length) return;
+      var a = enabledCards[i];
+      var b = enabledCards[j];
+      if (delta < 0) host.insertBefore(a, b);
+      else host.insertBefore(b, a);
+      refreshPluginOrderUi();
+      try {
+        await persistPlugins();
+        showToast('已更新执行顺序');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
     async function onPluginToggle(ev) {
       var input = ev.target;
       if (!input || !input.classList.contains('plugin-enable')) return;
       var revertTo = !input.checked;
+      var host = document.getElementById('plugins-list');
       try {
-        await persistPlugins();
         var on = input.checked;
         var card = input.closest('.plugin-card');
-        if (card) {
+        if (card && host) {
           card.classList.toggle('is-enabled', on);
+          if (on) {
+            host.appendChild(card);
+            var pid = card.getAttribute('data-plugin-id');
+            var meta = _pluginCatalog.find(function (p) {
+              return p.id === pid;
+            });
+            var order = host.querySelectorAll('.plugin-card.is-enabled').length;
+            var tmp = document.createElement('div');
+            tmp.innerHTML = buildPluginCardHtml(meta || { id: pid, title: pid }, true, order);
+            var fresh = tmp.firstElementChild;
+            card.replaceWith(fresh);
+            card = fresh;
+          } else {
+            var badge = card.querySelector('.plugin-order-badge');
+            if (badge) badge.remove();
+            var actions = card.querySelector('.plugin-card-actions');
+            if (actions) actions.remove();
+          }
           var st = card.querySelector('.plugin-card-status');
           var lab = card.querySelector('.plugin-toggle-label');
           if (st) {
@@ -1063,6 +1182,8 @@
           }
           if (lab) lab.textContent = on ? '已启用' : '未启用';
         }
+        refreshPluginOrderUi();
+        await persistPlugins();
         showToast(on ? '启用成功' : '已禁用');
       } catch (e) {
         alert(e.message);
@@ -1077,16 +1198,22 @@
       try {
         var data = await fetchJson('/api/plugins');
         _pluginCatalog = data.plugins || [];
-        var enabled = new Set(data.enabled || []);
+        var enabledIds = data.enabled || [];
+        var enabled = new Set(enabledIds);
         if (!_pluginCatalog.length) {
           host.textContent = '暂无已注册插件。';
           return;
         }
-        host.innerHTML = _pluginCatalog
+        var sorted = sortPluginsForDisplay(_pluginCatalog, enabledIds);
+        var order = 0;
+        host.innerHTML = sorted
           .map(function (p) {
-            return buildPluginCardHtml(p, enabled.has(p.id));
+            var on = enabled.has(p.id);
+            if (on) order += 1;
+            return buildPluginCardHtml(p, on, on ? order : null);
           })
           .join('');
+        refreshPluginOrderUi();
       } catch (e) {
         host.textContent = e.message || String(e);
       }

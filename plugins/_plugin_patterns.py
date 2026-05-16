@@ -18,8 +18,10 @@ from src.runtime.client_registry import get_client, iter_online_clients, require
 # ---------------------------------------------------------------------------
 
 
-async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
-  ...
+async def handle(client: LwApiClient, resp: SyncMessageResponse) -> bool | None:
+    """处理消息。返回 False 时框架不再调用后续插件（见 src.plugins.types.HANDLE_STOP_CHAIN）。"""
+    ...
+    # return False  # 已处理且不希望后续插件再跑
 
 
 # ---------------------------------------------------------------------------
