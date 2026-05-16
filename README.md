@@ -1,108 +1,91 @@
 # lwapi-py
 
-面向 **LwApi** 的 Python 仓库：提供异步 **`lwapi/` SDK**，以及 **`src/`** 下的 aiohttp **Web 运维台**——管理多账号、扫码登录、按插件链处理同步消息、查看日志与账号级 WebSocket 事件。
+面向 **LwApi** 的 Python 项目：提供异步 **`lwapi/` SDK**，以及 **`src/`** 下的 aiohttp **Web 运维台**（多账号、扫码登录、插件链、消息入库与日志）。
+
+**本文档以插件开发者为主**：如何发现/启用插件、处理消息、在不上线消息时主动发信、以及生命周期钩子。运维与打包见文末附录。
 
 ---
 
-## 环境要求与启动
+## 插件系统概览
 
-- **Python ≥ 3.9**
-- 已部署且可访问的 **LwApi** 服务（默认 `http://localhost:8081`）
+```text
+LwApi 消息同步
+    │
+    ▼
+composite_message_handler（src/plugins/chain.py）
+    │
+    ├─► message_inbox：写入 config/messages.sqlite（供运维台「消息」页，失败不影响插件）
+    │
+    └─► 按 config/plugins.json 的 enabled 顺序，依次调用各插件 handle(client, resp)
+
+BotService 账号上线/下线
+    │
+    ├─► client_registry：注册/注销在线 LwApiClient
+    └─► lifecycle：对已启用插件调用 on_bot_online / on_bot_offline
+
+Web 进程启动（aiohttp cleanup_ctx）
+    │
+    ├─► on_app_ready（每个已启用插件，一次）
+    └─► start_background（每个已启用插件，进程级长驻协程）
+```
+
+两件事不要混用：
+
+| 机制 | 作用 |
+|------|------|
+| **代码发现** | 启动时扫描 `plugins/lwplugin_*.py`，注册 `PLUGIN_ID` 与钩子；控制台会打印 id / 标题。 |
+| **运行启用** | `config/plugins.json` 的 `enabled` 数组决定**哪些插件参与**消息链与生命周期；**顺序即 `handle` 执行顺序**。 |
+
+仅改 `plugins.json` 可热更新启用列表（见下文）；**新增/修改插件 `.py` 必须重启进程**。
+
+---
+
+## 快速开始（插件作者）
 
 ```bash
 pip install -r requirements.txt
 python run.py
 ```
 
-默认运维台监听 **`0.0.0.0:8090`**，浏览器打开终端打印的地址（本机一般为 `http://127.0.0.1:8090`）。启动机器人做扫码登录前，**请先打开对应账号页面并保持 WebSocket 连接**，否则界面收不到二维码（见下文「扫码与 WebSocket」）。
+浏览器打开终端提示的地址（默认 `http://127.0.0.1:26121`）。在 **插件管理** 勾选你的 `PLUGIN_ID` 并保存，或编辑 `config/plugins.json`。
 
-### 环境变量
+自定义插件目录（可选）：
 
-| 变量 | 默认值 | 含义 |
-|------|--------|------|
-| `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址；`BotService` 创建 `LwApiClient` 时使用。 |
-| `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址。 |
-| `LWAPI_WEB_PORT` | `8090` | 运维台端口。 |
-| `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 用户自定义插件目录；可改为绝对路径，便于多项目共用一套插件。 |
-
-可在项目根目录放置 **`.env`**：`src/services/bot_service.py` 在导入时会执行 `load_dotenv()`。
-
-### 配置文件（简要）
-
-| 路径 | 作用 |
-|------|------|
-| `config/accounts.json` | 多账号列表（`device_id`、`wxid`、`remark`、`proxy` 等）。 |
-| `config/plugins.json` | `enabled` 数组：已注册插件的 **id** 及 **执行顺序**。 |
-
----
-
-## 仓库结构
-
-```text
-lwapi-py/
-├── lwapi/                 # LwApi Python SDK（HTTP、登录、消息等）
-├── plugins/               # 消息插件目录（首层 lwplugin_*.py 自动注册）
-├── src/
-│   ├── main.py            # Web 进程入口
-│   ├── account_loader.py  # accounts.json 读写 + account_slot_key
-│   ├── login_service.py   # 二次登录 + 二维码流式登录（依赖 Web emit）
-│   ├── message_handler.py # 消息回调入口 → 插件链
-│   ├── utils.py           # 日志、原子写 JSON、读日志尾等工具
-│   ├── plugins/           # 插件框架：registry、chain、settings
-│   ├── runtime/           # 账号级 WebSocket 事件总线
-│   ├── services/          # bot_service、二维码渲染等
-│   └── web/               # aiohttp 路由与静态前端
-├── config/                # accounts.json、plugins.json（运行时生成或自备）
-├── logs/                  # 按备注分文件的滚动日志
-├── run.py                 # 启动运维台
-├── requirements.txt
-└── README.md
+```bash
+export LWAPI_PLUGINS_DIR=/path/to/my-plugins   # 绝对路径，多项目共用一套插件
 ```
 
-### 升级项目时如何保留自己的插件
+---
 
-拉取或覆盖上游代码时，建议只动 **`src/`、`lwapi/`** 等框架目录，**保留** 下列路径即可无痛迁移业务：
+## 插件文件约定
 
-| 路径 | 说明 |
+| 规则 | 说明 |
 |------|------|
-| `plugins/` | 你的 `lwplugin_*.py` 及子目录中的私有代码 |
-| `config/plugins.json` | 已启用插件 id 及执行顺序 |
-| `config/accounts.json` | 账号配置 |
+| 路径 | `plugins/lwplugin_<名称>.py`，**仅扫描首层** |
+| 前缀 | 文件名必须以 `lwplugin_` 开头 |
+| 子目录 | `plugins/mybiz/*.py` **不会**被当作插件加载，可放私有业务代码 |
+| 下划线文件 | 不以 `lwplugin_` 开头的文件（如 `_patterns.py`）**不会**加载 |
 
-仓库自带的公共示例为 `plugins/lwplugin_demo_helper.py`、`plugins/lwplugin_debug_types.py`；升级时若你未改过这两个文件，可直接覆盖。业务插件请新建 **`lwplugin_` 前缀** 文件，或把私有代码放在 `plugins/` 子目录（不会被扫描）。
+每个插件模块需提供：
+
+| 符号 | 必填 | 说明 |
+|------|------|------|
+| `PLUGIN_ID` | 是 | 稳定唯一 id，写入 `plugins.json` 的 `enabled` |
+| `PLUGIN_TITLE` | 否 | 运维台展示标题，默认用 id |
+| `PLUGIN_DESCRIPTION` | 否 | 运维台说明 |
+| `PLUGIN_VERSION` / `PLUGIN_AUTHOR` | 否 | 元数据，默认 `1.0.0` / 空 |
+| `async def handle(client, resp)` | 是 | 消息回调入口 |
+| `on_app_ready` / `on_bot_online` / `on_bot_offline` / `start_background` | 否 | 见下文「生命周期钩子」 |
+
+`handle` 签名与 LwApi 一致：`(LwApiClient, SyncMessageResponse) -> None`，类型见 `lwapi.models.msg`。
 
 ---
 
-## 编写第一个插件（详细步骤与注意事项）
+## 第一步：最小消息插件
 
-### 插件是什么、何时被调用
-
-LwApi 消息同步会在一批数据到达时回调 **`composite_message_handler`**（见 `src/plugins/chain.py`）。它会读取 `config/plugins.json` 中的 **`enabled`**，用 `registry.resolve_handlers` 转成有序的 `PluginSpec` 列表，再**依次**调用每个插件的 **`handle(client, resp)`**。
-
-因此你要弄清两件事：
-
-1. **代码发现**：在 **`plugins/`** 首层放置 **`lwplugin_*.py`**，进程启动时由 `registry` 扫描并注册，控制台会打印每个插件的 **id** 与 **名称**；运维台 `GET /api/plugins` 亦可列出（**无需改 `registry.py`**）。
-2. **运行启用**：`plugins.json` 的 `enabled` 里要包含你的 **`PLUGIN_ID`**，且顺序即执行顺序。
-
-公共示例：`plugins/lwplugin_demo_helper.py`（`demo_helper`）、`plugins/lwplugin_debug_types.py`（`debug_types`）。  
-`plugins/` **子目录**内的 `.py` **不会**被扫描，可存放你的其它业务代码，与插件注册隔离。
-
-### 第一步：新建插件模块
-
-在 **`plugins/`** 首层新建文件，文件名必须以 **`lwplugin_`** 开头，例如 **`lwplugin_my_hello.py`**（可参考 `plugins/_example.py` 复制改名）。每个插件模块需包含元数据常量 + 异步入口 **`handle`**：
-
-| 约定项 | 说明 |
-|--------|------|
-| 文件名 | `plugins/lwplugin_<名称>.py`，仅扫描首层 |
-| `PLUGIN_ID` | **稳定唯一**字符串，写入 `plugins.json` 的 `enabled`；勿随意改名 |
-| `PLUGIN_TITLE` | 运维台展示用短标题 |
-| `PLUGIN_DESCRIPTION` | 运维台展示用说明 |
-| `async def handle(client, resp)` | 与 `MsgClient` 回调一致：第一个参数为 **`LwApiClient`**，第二个为 **`SyncMessageResponse`**（见 `lwapi.models.msg`） |
-
-**最小可用示例**（仅私聊文本里回复固定句，便于验证链路）：
+在 `plugins/` 下新建 `lwplugin_my_bot.py`：
 
 ```python
-# plugins/lwplugin_my_hello.py
 from __future__ import annotations
 
 from loguru import logger
@@ -110,197 +93,243 @@ from loguru import logger
 from lwapi import LwApiClient
 from lwapi.models.msg import SyncMessageResponse
 
-PLUGIN_ID = "my_hello"
-PLUGIN_TITLE = "示例：你好世界"
-PLUGIN_DESCRIPTION = "收到私聊文本「测试」时回复一句确认。"
-PLUGIN_VERSION = "1.0.0"
-PLUGIN_AUTHOR = "LWAPI"
-
-
+PLUGIN_ID = "my_bot"
+PLUGIN_TITLE = "我的机器人"
+PLUGIN_DESCRIPTION = "私聊「测试」时回复一句。"
 
 async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
+    wxid = (client.wxid or "").strip()
     for msg in resp.addMsgs or []:
-        if msg.msgType != 1:
-            continue  # 1 = 普通文本，其它类型请按需处理或跳过
-
-        raw = msg.content.string or ""
-        content = raw.strip()
-        sender = msg.fromUserName.string or ""
-
+        if msg.msgType != 1:  # 1 = 文本
+            continue
+        sender = (msg.fromUserName.string or "").strip()
+        if sender == wxid:  # 忽略自己发出的回显，避免环路
+            continue
+        content = (msg.content.string or "").strip()
         if content == "测试":
             logger.info(f"[{PLUGIN_ID}] reply to {sender}")
-            await client.msg.send_text_message(to_wxid=sender, content="插件已收到：测试")
+            await client.msg.send_text_message(
+                to_wxid=sender, content="插件已收到：测试"
+            )
 ```
 
-### 第二步：重启进程
-
-**新增、删除或重命名** `plugins/lwplugin_*.py`，或修改插件 **Python 代码** 后，必须 **重启 `python run.py`**，注册表才会重新扫描并在控制台打印插件列表。仅靠改 `plugins.json` **不能**让「尚未被加载过的新文件」生效。
-
-私有代码可放在 `plugins/` 子目录（如 `plugins/mybiz/helper.py`），**不会**参与插件注册。以 `_` 开头的文件（如 `_example.py`）仅作模板，**不会**被加载。
-
-### 第三步：启用插件
-
-任选其一：
-
-- 打开运维台 **插件管理**，勾选你的插件并保存（会调用 `PUT /api/plugins`）。
-- 或手动编辑 `config/plugins.json`，在 `enabled` 数组中加入 **`my_hello`**（或你定义的 `PLUGIN_ID`）。
-
-`enabled` 的**数组顺序**就是插件执行顺序：排在前面的先执行。若前一个插件已经回复了消息，后一个仍会执行——注意避免重复回复或逻辑打架。
-
-### 第四步：验证
-
-1. 重启进程（若刚新增或修改了 `plugins/` 下的文件）。
-2. 在运维台「插件管理」确认列表中出现你的插件，且 `plugins.json` 的 `enabled` 包含对应 id。
-3. 启动对应账号机器人，私聊发送「测试」，观察日志与是否收到回复。
+1. **重启** `python run.py`（新文件必须重启才会被扫描）。
+2. 在运维台启用 `my_bot`，或把 `"my_bot"` 加入 `config/plugins.json` 的 `enabled`。
+3. 启动对应账号机器人，私聊发送「测试」验证。
 
 ---
 
-## 编写插件时应注意的事项
+## 生命周期钩子（可选）
 
-### 1. 异常与稳定性
+在 `lwplugin_*.py` 中按需定义以下 **async** 函数；**仅对已启用（`enabled`）的插件**调用。单个钩子抛错会被框架捕获并打日志，**不会**拖垮其它插件或账号。
 
-`chain.py` 对每个插件的 `handle` 包了 **`try/except`**：你抛出的异常**不会**中断后续插件，但会打 **`logger.exception`**。仍建议在插件内对**可预期错误**自行处理，并避免在循环里抛未捕获异常刷屏。
+| 钩子 | 调用时机 | 典型用途 |
+|------|----------|----------|
+| `on_app_ready()` | Web 进程启动后，每个已启用插件**一次** | 延迟 N 秒做初始化、发启动通知 |
+| `on_bot_online(client)` | 某账号登录成功且消息监听已启动 | 欢迎语、拉取状态 |
+| `on_bot_offline(wxid)` | 该账号下线或机器人任务结束 | 清理缓存；账号级后台协程会被框架 cancel |
+| `start_background()` | 应用存活期间**一个**长驻协程 | 定时巡检所有在线账号 |
 
-### 2. `resp.addMsgs` 与消息类型
+实现位置：`src/plugins/lifecycle.py`（由 `BotService` 与 `AdminWebApp` 挂载）。
 
-- `SyncMessageResponse.addMsgs` 是一批新消息，可能为空；建议写 **`for msg in resp.addMsgs or []:`**。
-- 常见 **`msg.msgType == 1`** 为普通文本；图片、语音、系统消息等类型请参考 `plugins/lwplugin_debug_types.py` 或 LwApi 文档，**不要假设全是文本**。
-- **`msg.content.string`**、**`msg.fromUserName.string`** 在模型里可能为 `None`，使用前建议 **`or ""`**，避免 `AttributeError`。
+### 主动拿在线客户端（不必等消息）
 
-### 3. 私聊与群聊
+账号上线后，`LwApiClient` 会登记在 `src/runtime/client_registry.py`。插件内可：
 
-- **私聊**：`fromUserName` 多为对方 wxid；发消息时 **`to_wxid`** 常用该 sender。
-- **群聊**：`fromUserName` 常为 **`xxx@chatroom`**；正文里常带 **`发言者wxid:\n正文`** 前缀，需要自己拆分或参考 `plugins/lwplugin_demo_helper.py` 的做法。若不想在群里误触自动回复，应加 **@机器人**、**固定前缀** 或关键词白名单等策略。
+```python
+from src.runtime.client_registry import get_client, require_client, iter_online_clients
 
-### 4. 避免「自己回自己」环路
+# 指定 wxid，未在线则抛错
+client = await require_client("wxid_xxx")
+await client.msg.send_text_message(to_wxid="filehelper", content="hello")
 
-同步下来的消息里可能包含**自己刚发出的消息**的回显。若插件对「包含某关键词」就自动回复，容易形成循环。应对 **`fromUserName`** 与当前 **`client.wxid`** 做判断，或忽略明显由本号发出的同步（具体字段以你抓包为准）；内置 `demo_helper` 文档中也强调了类似防护思路。
+# 可能为 None
+client = await get_client("wxid_xxx")
 
-### 5. 性能与异步
+# 当前所有在线机器人 {wxid: client}
+online = await iter_online_clients()
+for wxid, client in online.items():
+    ...
+```
 
-`handle` 必须是 **`async def`**。内部请 **`await`** SDK 的异步发送接口；**不要在插件里写长时间阻塞的同步 IO**，否则会拖慢整条消息链与后续插件。
+### 账号级后台协程（上线后延迟发信等）
 
-### 6. 配置热更新 vs 代码热更新
+在 `on_bot_online` 里用 `spawn_bot_task`，**该账号下线时自动 cancel**，无需自建任务表：
 
-| 操作 | 是否需要重启进程 |
-|------|------------------|
-| 只改 `config/plugins.json` 的 `enabled` 或顺序 | **一般不需要**（依赖 mtime 缓存失效后下一轮消息生效）。 |
-| 改 `plugins/` 下插件代码，或新增/删除插件文件 | **需要重启**。 |
+```python
+from src.plugins.bot_tasks import spawn_bot_task
 
-### 7. 与内置插件对照学习
+async def _welcome(client: LwApiClient) -> None:
+    await asyncio.sleep(2)
+    await client.msg.send_text_message(to_wxid="filehelper", content="已上线")
 
-建议阅读顺序：`plugins/_example.py`（最小私聊回复模板）→ `plugins/lwplugin_debug_types.py`（日志字段）→ `plugins/lwplugin_demo_helper.py`（群聊命令、防环路）。发送接口参数还可对照 `lwapi/models/msg_requests.py` 。
+async def on_bot_online(client: LwApiClient) -> None:
+    wxid = (client.wxid or "").strip()
+    spawn_bot_task(wxid, _welcome(client), name=f"{PLUGIN_ID}:welcome")
+```
+
+### 进程启动后延迟执行
+
+`on_app_ready` 内请自行 `asyncio.create_task`，避免阻塞启动：
+
+```python
+async def on_app_ready() -> None:
+    async def _later() -> None:
+        await asyncio.sleep(30)
+        online = await iter_online_clients()
+        if online:
+            wxid, client = next(iter(online.items()))
+            await client.msg.send_text_message(to_wxid="filehelper", content="启动提醒")
+    asyncio.create_task(_later(), name=f"{PLUGIN_ID}:app-ready")
+```
+
+### 全事件示例
+
+仓库内 **`plugins/lwplugin_my_hello.py`** 演示了 `handle`、`on_app_ready`、`on_bot_online`、`on_bot_offline`、`start_background` 与 `require_client`；顶部配置区填写 `BOT_WXID` / `TO_WXID`，留空则跳过对应逻辑。
+
+群聊命令、@ 解析、防自回复可参考 **`plugins/lwplugin_demo_helper.py`**（`PLUGIN_ID = demo_helper`）。
 
 ---
 
-## 运维台 HTTP API（速查）
+## 配置：`config/plugins.json`
 
-更完整的路径与状态码以 `src/web/app.py` 为准。
+```json
+{
+  "enabled": ["demo_helper", "my_hello"]
+}
+```
+
+| 操作 | 是否需要重启 |
+|------|----------------|
+| 修改 `enabled` 或顺序 | **否**（按文件 mtime 缓存失效，下一条消息或下一次生命周期即生效） |
+| 新增/删除/重命名 `lwplugin_*.py` 或改插件代码 | **是** |
+
+保存方式：运维台 **插件管理**（`PUT /api/plugins`），或手动编辑 JSON。`PUT` 会校验 id 必须已在注册表中存在。
+
+首次无配置文件时，框架会生成默认 `enabled`（见 `src/plugins/settings.py` 中的 `DEFAULT_ENABLED`）。
+
+---
+
+## 处理消息时要注意什么
+
+### 异常
+
+`chain.py` 对每个 `handle` 包了一层 `try/except`：异常**不会**中断后续插件，但会 `logger.exception`。仍建议在插件内处理可预期错误。
+
+### `addMsgs` 与类型
+
+- 使用 `for msg in resp.addMsgs or []:`。
+- `msgType == 1` 一般为文本；图片、语音等见 `src/message_inbox.py` 中的类型标签，或对照 LwApi 文档。
+- `msg.content.string`、`msg.fromUserName.string` 可能为 `None`，请 `or ""`。
+
+### 私聊与群聊
+
+- **私聊**：`fromUserName` 多为对方 wxid；回复时 `to_wxid=sender`。
+- **群聊**：`fromUserName` 常为 `xxx@chatroom`；正文常为 `发言者wxid:\n内容`，需自行解析（见 `demo_helper`）。建议用 `#命令`、@ 机器人或白名单，避免误回复。
+
+### 避免回复环路
+
+同步流里可能包含**本号刚发出的消息**。比较 `fromUserName` 与 `client.wxid`，或只响应明确触发条件。
+
+### 多插件顺序
+
+`enabled` 中靠前的插件先执行；**每个都会跑完**，前一个已回复不会阻止后一个——注意避免重复回复或逻辑冲突。
+
+### 异步
+
+`handle` 与钩子均须 `async def`；发送消息用 SDK 的 `await`，避免长时间同步阻塞。
+
+---
+
+## 发送消息（SDK）
+
+文本优先：
+
+```python
+await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
+```
+
+群聊 @ 成员：`at="wxid_a,wxid_b"` 或 `at="notify@all"`（见 `demo_helper`）。
+
+更多类型与请求体模型见 **`lwapi/models/msg_requests.py`**，封装方法见 **`lwapi/apis/msg.py`**。
+
+---
+
+## 与框架其它模块的关系
+
+| 模块 | 插件作者是否需要改 |
+|------|-------------------|
+| `src/plugins/registry.py` | 否，自动扫描 |
+| `src/plugins/chain.py` | 否 |
+| `src/message_handler.py` | 否，仅为兼容入口 |
+| `src/message_inbox.py` | 否；入库在插件链之前，插件可读库做统计（一般不必） |
+| `src/services/bot_service.py` | 否；负责登录、注册在线 client、触发 lifecycle |
+
+升级上游时，**保留** `plugins/` 与 `config/plugins.json` 即可；业务请放在自有 `lwplugin_*.py` 或 `plugins/` 子目录。
+
+---
+
+## 附录 A：环境与启动
+
+- **Python ≥ 3.9**
+- 可访问的 **LwApi** 服务（默认 `http://localhost:8081`）
+
+| 变量 | 默认值 | 含义 |
+|------|--------|------|
+| `LWAPI_BASE_URL` | `http://localhost:8081` | LwApi 根地址 |
+| `LWAPI_WEB_HOST` | `0.0.0.0` | 运维台监听地址 |
+| `LWAPI_WEB_PORT` | `26121` | 运维台端口 |
+| `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 插件目录 |
+| `LWAPI_MSG_SYNC_MODE` | `websocket` | 消息同步：`websocket` 或 `http` |
+| `LWAPI_OPEN_BROWSER` | 未设置 | 设为 `1`/`true` 时启动后打开浏览器 |
+
+项目根 `.env` 会在 `bot_service` 导入时由 `load_dotenv()` 加载。
+
+**扫码登录**：启动机器人前请先打开该账号页面并保持 **WebSocket**（`/ws/account/{idx}`），否则界面收不到二维码。
+
+---
+
+## 附录 B：运维台 API（插件相关）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/` | 运维台首页。 |
-| `GET` | `/api/accounts` | 账号列表（含 `running`、`pending_login`）。 |
-| `POST` | `/api/accounts` | 新增账号。 |
-| `PUT` | `/api/accounts/{idx}` | 更新账号（运行中/登录中不可改）。 |
-| `DELETE` | `/api/accounts/{idx}` | 删除账号（运行中/登录中不可删）。 |
-| `POST` | `/api/accounts/{idx}/start` | 启动该账号。 |
-| `POST` | `/api/accounts/{idx}/stop` | 停止该账号。 |
-| `POST` | `/api/start-all` | 顺序启动全部。 |
-| `GET` | `/api/accounts/{idx}/log?lines=50` | 当日日志尾部。 |
-| `GET` / `PUT` | `/api/plugins` | 列出插件元数据 / 保存 `enabled`。 |
-| `GET` | `/ws/account/{idx}` | 账号级 WebSocket（扫码与登录事件）。 |
+| `GET` | `/api/plugins` | 已发现插件元数据 + 当前 `enabled` |
+| `PUT` | `/api/plugins` | body: `{"enabled": ["id1", "id2"]}` |
+
+完整路由见 `src/web/app.py`。
 
 ---
 
-## 打包分发（对方无需安装 Python）
+## 附录 C：打包分发（简述）
 
-本项目是**本机 Web 运维台**（浏览器访问），不是传统 GUI 桌面程序。使用 **PyInstaller** 将 Python 与依赖打进可执行文件；对方仍需**单独部署 LwApi**（`LWAPI_BASE_URL`），打包不会包含 LwApi 服务本身。
+使用 **PyInstaller** 在**目标系统**上分别打包；对方需自行部署 LwApi。解压后 `plugins/`、`config/` 与可执行文件同级（macOS 为 `.app` **所在文件夹**）。
 
-**重要：** 必须在**目标操作系统**上分别打包（在 Windows 上打 Windows 包，在 macOS 上打 `.app`，在 Linux 上打 Linux 包）。在 WSL 里打出来的是 Linux 包，不能给 Windows 用户直接使用。
+| 系统 | 脚本 |
+|------|------|
+| Windows | `build/build-windows.bat` |
+| Linux | `build/build-linux.sh` |
+| macOS | `build/build-macos.sh` |
 
-### 打包脚本一览
+产物与 `.env.example` 说明见解压包内 **`使用说明.txt`**。开发运行：`python run.py`；打包运行：无需本机 Python。
 
-| 系统 | 脚本 | 产物 |
-|------|------|------|
-| Windows | `build/build-windows.bat`（推荐）或 `build/build-windows.ps1` | `dist/lwapi-console/`、`dist/lwapi-console-<版本>-windows-<架构>.zip` |
-| Linux | `build/build-linux.sh` | 同上（`linux-<架构>`） |
-| macOS | `build/build-macos.sh` | `dist/lwapi-console.app` + 同级 `config/`、`dist/lwapi-console-<版本>-macos-<架构>.zip` |
+---
 
-### 如何打包（开发者）
-
-**Windows（Win11 推荐）：**
-
-在资源管理器中 **双击** `build\build-windows.bat`（黑窗口跑完后按任意键关闭）。
-
-或在 **PowerShell / 终端** 里于项目根目录执行：
-
-```powershell
-.\build\build-windows.bat
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build\build-windows.ps1
-```
-
-**不要直接双击 `build-windows.ps1`**：Win11 会弹出「选择打开方式」。打包逻辑已全部放在 **纯 CMD 的 `build-windows.bat`** 里，不依赖 PowerShell 中文编码。
-
-若双击 `.bat` 提示「不是内部或外部命令 / 不是批处理文件」：请用记事本打开该文件确认首行为 `@echo off`；或右键「以管理员身份运行」；或在 **cmd** 里执行：`cd /d 项目路径` 然后 `build\build-windows.bat`。
-
-**Linux：**
-
-```bash
-chmod +x build/build-linux.sh
-./build/build-linux.sh
-```
-
-**macOS：**
-
-```bash
-chmod +x build/build-macos.sh
-./build/build-macos.sh
-```
-
-脚本会自动：创建/使用 `venv`、安装 `requirements.txt` 与 `build/requirements-build.txt`（含 PyInstaller）、执行 `build/lwapi-console.spec`、运行 `build/package_dist.py` 合并配置模板并生成 zip。
-
-仅重新组装 zip（已跑过 PyInstaller 时）：
-
-```bash
-python build/package_dist.py
-```
-
-### 发给对方什么
-
-优先发送 **`dist/lwapi-console-<版本>-<平台>-<架构>.zip`**。对方解压后：
-
-1. 将 `.env.example` 复制为 `.env`，填写 `LWAPI_BASE_URL`（LwApi 地址）。
-2. 运行可执行文件（打包版默认会自动打开浏览器；端口默认 **26121**，见 `.env` 中 `LWAPI_WEB_PORT`）。
-3. 在运维台添加账号；`config/`、`plugins/`、`logs/` 与程序在同一目录（macOS 为 **`.app` 所在文件夹**内，不要放进 `.app` 包内）。
-
-更详细的对方说明见解压包内的 **`使用说明.txt`**。
-
-### 开发运行 vs 打包运行
-
-| 方式 | 命令 | 说明 |
-|------|------|------|
-| 开发 | `python run.py` | 需本机 Python 3.9+ |
-| 打包 | 双击/运行 `lwapi-console` | 无需 Python；入口为 `build/entry.py` |
-
-打包后工作目录会自动切到「程序旁」目录，保证 `config/`、`plugins/` 相对路径与开发时一致。设置 `LWAPI_OPEN_BROWSER=0` 可关闭启动时自动打开浏览器。
-
-### 目录说明（build/）
+## 仓库结构（与插件相关）
 
 ```text
-build/
-├── build-windows.bat      # Windows 一键打包（双击运行）
-├── build-windows.ps1      # 同上（由 .bat 调用）
-├── build-linux.sh         # Linux 一键打包
-├── build-macos.sh         # macOS 一键打包
-├── entry.py               # PyInstaller 入口
-├── lwapi-console.spec     # PyInstaller 配置
-├── package_dist.py        # 合并模板、生成 zip
-├── requirements-build.txt # 打包额外依赖（pyinstaller）
-└── dist-template/         # 随包分发的 .env.example、使用说明等
+lwapi-py/
+├── lwapi/                    # LwApi Python SDK
+├── plugins/                  # lwplugin_*.py（你的业务插件）
+├── config/
+│   ├── plugins.json          # enabled 列表
+│   ├── accounts.json
+│   └── messages.sqlite       # 消息入库（框架维护）
+├── src/
+│   ├── plugins/              # registry、chain、settings、lifecycle、bot_tasks
+│   ├── runtime/              # client_registry、account_events
+│   ├── message_handler.py    # → composite_message_handler
+│   ├── message_inbox.py
+│   └── services/bot_service.py
+├── run.py
+└── README.md
 ```
-
----
