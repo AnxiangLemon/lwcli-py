@@ -32,7 +32,13 @@ from lwapi.sync_utils import SyncMode, normalize_sync_mode
 from src.account_loader import account_slot_key, save_accounts
 from src.login_service import LoginService
 from src.message_handler import default_message_handler
+from src.plugins.lifecycle import notify_bot_offline, notify_bot_online
 from src.runtime.account_events import AccountEventHub
+from src.runtime.client_registry import (
+    get_client as registry_get_client,
+    register_online_client,
+    unregister_online_client,
+)
 from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
@@ -58,8 +64,6 @@ class BotService:
         self._lock = asyncio.Lock()
         self._events = account_events
         self._login_pending: Set[int] = set()
-        self._clients_lock = asyncio.Lock()
-        self._online_clients_by_wxid: Dict[str, LwApiClient] = {}
 
     @property
     def login_pending_indices(self) -> Set[int]:
@@ -103,20 +107,6 @@ class BotService:
                 pass
         return True
 
-    async def _register_online_client(self, wxid: str, client: LwApiClient) -> None:
-        key = (wxid or "").strip()
-        if not key:
-            return
-        async with self._clients_lock:
-            self._online_clients_by_wxid[key] = client
-
-    async def _unregister_online_client(self, wxid: str) -> None:
-        key = (wxid or "").strip()
-        if not key:
-            return
-        async with self._clients_lock:
-            self._online_clients_by_wxid.pop(key, None)
-
     async def send_text_message(self, bot_wxid: str, to_wxid: str, content: str) -> dict:
         """
         使用当前在线的机器人客户端发送文本（需该账号机器人已启动且已登录）。
@@ -129,8 +119,7 @@ class BotService:
         c = (content or "").strip()
         if not b or not t or not c:
             raise ValueError("bot_wxid、to_wxid、content 均不能为空")
-        async with self._clients_lock:
-            client = self._online_clients_by_wxid.get(b)
+        client = await registry_get_client(b)
         if client is None:
             raise ValueError("该机器人未在线：请先在账号列表启动对应机器人并完成登录")
         return await client.msg.send_text_message(t, c)
@@ -230,12 +219,14 @@ class BotService:
                                 }
                             )
 
-                        await self._register_online_client(wxid, client)
+                        await register_online_client(wxid, client)
+                        await notify_bot_online(client)
                         try:
                             hold = asyncio.get_running_loop().create_future()
                             await hold
                         finally:
-                            await self._unregister_online_client(wxid)
+                            await notify_bot_offline(wxid)
+                            await unregister_online_client(wxid)
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:

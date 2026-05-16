@@ -19,6 +19,7 @@ from src.app_paths import static_dir
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
 from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import query_list, query_summary
+from src.plugins.lifecycle import plugin_background_lifespan
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
@@ -37,6 +38,7 @@ class AdminWebApp:
 
     def build(self) -> web.Application:
         app = web.Application()
+        app.cleanup_ctx.append(plugin_background_lifespan)
         app.add_routes(
             [
                 web.static("/static", str(STATIC_DIR)),
