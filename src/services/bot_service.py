@@ -27,6 +27,7 @@ prepare_runtime()
 load_dotenv(env_file())
 
 from lwapi import LwApiClient
+from lwapi.exceptions import LoginError
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
 from src.account_loader import account_slot_key, save_accounts
@@ -172,7 +173,7 @@ class BotService:
                         if self._events:
                             await emit({"event": "login_saved", "wxid": wxid})
 
-                        client.login.start_heartbeat(interval=150)
+                        client.login.start_heartbeat(interval=20)
                         sec_iv = _env_int(
                             "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
                             4 * 3600,
@@ -229,6 +230,32 @@ class BotService:
                             await unregister_online_client(wxid)
                     except asyncio.CancelledError:
                         raise
+                    except LoginError as e:
+                        if e.recoverable:
+                            bot_logger.info(
+                                f"【{remark}】登录中断（{e.reason or 'unknown'}）: {e.message}"
+                            )
+                            if self._events:
+                                await emit(
+                                    {
+                                        "event": "login_interrupted",
+                                        "code": e.reason,
+                                        "message": e.message,
+                                    }
+                                )
+                            await asyncio.sleep(2)
+                        else:
+                            bot_logger.warning(
+                                f"【{remark}】登录失败: {e.message}"
+                            )
+                            if self._events:
+                                await emit(
+                                    {
+                                        "event": "bot_error",
+                                        "message": e.message,
+                                    }
+                                )
+                            await asyncio.sleep(10)
                     except Exception as e:
                         bot_logger.exception(f"【{remark}】运行异常: {e}")
                         if self._events:

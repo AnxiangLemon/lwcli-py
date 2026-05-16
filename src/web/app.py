@@ -24,6 +24,12 @@ from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
+from src.web.auth import (
+    api_auth_login,
+    api_auth_logout,
+    api_auth_status,
+    auth_middleware,
+)
 from src.utils import (
     clear_account_today_log,
     effective_account_remark,
@@ -41,11 +47,15 @@ class AdminWebApp:
         self.bot_service = BotService(account_events=self.account_events)
 
     def build(self) -> web.Application:
-        app = web.Application()
+        app = web.Application(middlewares=[auth_middleware])
         app.cleanup_ctx.append(plugin_background_lifespan)
         app.add_routes(
             [
                 web.static("/static", str(STATIC_DIR)),
+                web.get("/login.html", self.login_page),
+                web.post("/api/auth/login", api_auth_login),
+                web.post("/api/auth/logout", api_auth_logout),
+                web.get("/api/auth/status", api_auth_status),
                 web.get("/", self.index),
                 web.get("/api/accounts", self.api_accounts),
                 web.post("/api/accounts", self.api_account_create),
@@ -66,6 +76,9 @@ class AdminWebApp:
             ]
         )
         return app
+
+    async def login_page(self, request: web.Request) -> web.Response:
+        return web.FileResponse(STATIC_DIR / "login.html")
 
     async def index(self, request: web.Request) -> web.Response:
         return web.FileResponse(STATIC_DIR / "index.html")

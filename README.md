@@ -284,6 +284,7 @@ await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
 | `LWAPI_PLUGINS_DIR` | `plugins`（项目根） | 插件目录 |
 | `LWAPI_MSG_SYNC_MODE` | `websocket` | 消息同步：`websocket` 或 `http` |
 | `LWAPI_OPEN_BROWSER` | 未设置 | 设为 `1`/`true` 时启动后打开浏览器 |
+| `LWAPI_WEB_TOKEN` | `123123` | 运维台登录 Token；**留空则关闭鉴权** |
 
 项目根 `.env` 会在 `bot_service` 导入时由 `load_dotenv()` 加载。
 
@@ -295,7 +296,9 @@ await client.msg.send_text_message(to_wxid=target, content="正文", at=None)
 
 ## 附录 A2：安全说明（部署前必读）
 
-运维台 **未内置登录或 Token 鉴权**。任何能访问监听地址的客户端均可：查看/修改账号、启停机器人、发送消息、修改插件、清空消息库。
+运维台默认启用 **Token 登录**（环境变量 `LWAPI_WEB_TOKEN`，默认 `123123`）。首次访问会跳转到 `/login.html`；登录成功后通过 HttpOnly Cookie 维持会话。API 也可使用 `Authorization: Bearer <token>`。
+
+将 `LWAPI_WEB_TOKEN` **留空** 可关闭鉴权（与旧版行为一致，仅建议在可信内网使用）。
 
 | 风险 | 说明 |
 |------|------|

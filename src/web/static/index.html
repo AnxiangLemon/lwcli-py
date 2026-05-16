@@ -39,6 +39,10 @@
         </button>
       </nav>
       <div class="sidebar-footer">
+        <button type="button" class="sidebar-btn is-logout" id="btn-logout" onclick="logoutAdmin()" title="退出登录" style="display: none">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          退出登录
+        </button>
         <button type="button" class="sidebar-btn" onclick="toggleTheme()" title="切换浅色 / 深色">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           切换主题
@@ -288,6 +292,22 @@
       } catch (e) {}
     })();
 
+    async function logoutAdmin() {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      } catch (e) {}
+      location.href = '/login.html';
+    }
+
+    (async function initAuthUi() {
+      try {
+        const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+        const data = await res.json();
+        const btn = document.getElementById('btn-logout');
+        if (btn && data.auth_enabled) btn.style.display = '';
+      } catch (e) {}
+    })();
+
     function showView(name) {
       document.querySelectorAll('.view-panel').forEach((p) => p.classList.remove('is-active'));
       const panel = document.getElementById('view-' + name);
@@ -303,7 +323,13 @@
     }
 
     async function fetchJson(url, options = {}) {
+      options.credentials = options.credentials || 'same-origin';
       const res = await fetch(url, options);
+      if (res.status === 401) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.href = '/login.html?next=' + next;
+        throw new Error('未登录');
+      }
       const text = await res.text();
       let data;
       try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
@@ -413,6 +439,18 @@
       if (ev === 'bot_online') {
         if (st) st.innerHTML = '<span class="ok">' + esc(msg.message || '机器人已在线') + '</span>';
         refreshAccounts({ soft: true });
+        return;
+      }
+      if (ev === 'login_interrupted') {
+        const hint = {
+          canceled: '扫码已取消，正在准备新二维码…',
+          expired: '二维码已过期，正在刷新…',
+          timeout: '扫码超时，正在刷新…',
+          stopped: '登录已停止',
+        };
+        if (st) {
+          st.innerHTML = '<span class="info">' + esc(hint[msg.code] || msg.message || '登录中断，将重试') + '</span>';
+        }
         return;
       }
       if (ev === 'bot_error') {

@@ -2,7 +2,7 @@
 import asyncio
 import time
 from enum import IntEnum
-from typing import Optional, Dict, Any, Tuple, AsyncIterator
+from typing import Optional, Dict, Any, Tuple, AsyncIterator, Callable, Awaitable
 
 import httpx
 from httpx import ConnectError, NetworkError, TimeoutException
@@ -53,6 +53,143 @@ def _extract_login_user(payload: dict) -> Tuple[Optional[str], Optional[str]]:
     return wxid, nickname
 
 
+def _qr_phase_for(status_val: Optional[int]) -> str:
+    if status_val is None:
+        return "unknown"
+    try:
+        st = QRStatus(status_val)
+    except ValueError:
+        return "unknown"
+    return {
+        QRStatus.NOT_SCANNED: "waiting",
+        QRStatus.SCANNED: "scanned",
+        QRStatus.CONFIRMING: "confirming",
+        QRStatus.CANCELED: "canceled",
+    }.get(st, "unknown")
+
+
+def _parse_qr_status(payload: dict) -> Tuple[Optional[int], Optional[str], Optional[str], Optional[str], Optional[int], Optional[QRStatus]]:
+    """从 QRCheck 响应解析 ret、wxid、verify_url、status。"""
+    ret, err_msg = _extract_ret_errmsg(payload)
+    wxid, _nickname = _extract_login_user(payload)
+    verify_url: Optional[str] = None
+    status_val: Optional[int] = None
+    current_status: Optional[QRStatus] = None
+    try:
+        qr = QRCheckResponse.model_validate(payload)
+        verify_url = getattr(qr, "verifyUrl", None) or payload.get("verifyUrl")
+        status_val = getattr(qr, "status", None)
+        if status_val is not None:
+            try:
+                current_status = QRStatus(status_val)
+            except ValueError:
+                current_status = None
+    except Exception:
+        verify_url = payload.get("verifyUrl")
+    return ret, err_msg, wxid, verify_url, status_val, current_status
+
+
+async def _iter_qr_poll(
+    fetch_check: Callable[[], Awaitable[dict]],
+    *,
+    interval: float,
+    timeout: float,
+    stop_event: Optional[asyncio.Event] = None,
+) -> AsyncIterator[Dict[str, Any]]:
+    """
+    二维码轮询核心循环。事件 type：
+    poll | success | expired | canceled | api_error | verify_url | status |
+    network_warning | poll_error | stopped | timeout
+    """
+    last_status: Optional[QRStatus] = None
+    last_verify_url: Optional[str] = None
+    net_failures = 0
+    poll_seq = 0
+
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                if stop_event is not None and stop_event.is_set():
+                    yield {"type": "stopped", "message": "监听已取消"}
+                    return
+                try:
+                    payload = await fetch_check()
+                    net_failures = 0
+                    poll_seq += 1
+                    ret, err_msg, wxid, verify_url, status_val, current_status = (
+                        _parse_qr_status(payload)
+                    )
+
+                    yield {
+                        "type": "poll",
+                        "seq": poll_seq,
+                        "ret": ret,
+                        "err_msg": err_msg,
+                    }
+
+                    if ret == 0 and wxid:
+                        yield {
+                            "type": "success",
+                            "wxid": wxid,
+                            "nickname": (_extract_login_user(payload)[1] or ""),
+                        }
+                        return
+
+                    if ret == QRStatus.EXPIRED:
+                        yield {"type": "expired", "message": "二维码已过期"}
+                        return
+
+                    if verify_url and verify_url != last_verify_url:
+                        yield {"type": "verify_url", "url": verify_url}
+                        last_verify_url = verify_url
+
+                    if current_status is not None and current_status != last_status:
+                        yield {
+                            "type": "status",
+                            "phase": _qr_phase_for(status_val),
+                            "raw_status": status_val,
+                            "ret": ret,
+                            "status": current_status,
+                        }
+                        last_status = current_status
+
+                    if current_status is QRStatus.CANCELED:
+                        yield {"type": "canceled", "message": "二维码已被取消"}
+                        return
+
+                    if ret is not None and ret != 0:
+                        yield {
+                            "type": "api_error",
+                            "message": err_msg or f"ret={ret}",
+                            "ret": ret,
+                        }
+                        return
+
+                except LoginError as e:
+                    yield {"type": "login_error", "message": str(e)}
+                    return
+                except (ConnectError, NetworkError, TimeoutException) as e:
+                    net_failures += 1
+                    yield {
+                        "type": "network_warning",
+                        "message": str(e),
+                        "failures": net_failures,
+                    }
+                except Exception as e:
+                    net_failures += 1
+                    yield {
+                        "type": "poll_error",
+                        "message": str(e),
+                        "failures": net_failures,
+                    }
+
+                backoff = min(30.0, interval * (2 ** min(net_failures, 3)))
+                await asyncio.sleep(max(0.2, backoff))
+
+    except TimeoutError:
+        yield {"type": "timeout", "message": "二维码登录超时"}
+
+
 class LoginClient:
     def __init__(self, transport: AsyncHTTPTransport):
         self.t = transport
@@ -85,86 +222,71 @@ class LoginClient:
         timeout: float = 300,
     ) -> str:
         """
-        轮询检测二维码状态：
-        - 状态变化才打提示
-        - verifyUrl 只提示一次（即使状态不变也能提示）
-        - 网络异常做轻量退避，避免刷屏+压接口
+        轮询检测二维码状态（阻塞直到成功或失败）。
+        与 stream_qr_status 共用 _iter_qr_poll 核心逻辑。
         """
 
-        last_status: Optional["QRStatus"] = None
-        last_verify_url: Optional[str] = None
-        net_failures = 0  # 连续网络失败次数，用于退避
+        async def _fetch() -> dict:
+            payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+            ret, err_msg = _extract_ret_errmsg(payload)
+            logger.debug(
+                f"QRCheck response: ret={ret}, errMsg={err_msg}, data={payload}"
+            )
+            return payload
 
-        try:
-            async with asyncio.timeout(timeout):
-                while True:
-                    try:
-                        payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
-                        net_failures = 0  # 一旦成功请求就清零
+        async for ev in _iter_qr_poll(
+            _fetch, interval=interval, timeout=timeout
+        ):
+            t = ev["type"]
+            if t == "poll":
+                continue
+            if t == "verify_url":
+                logger.warning(
+                    f"检测到安全验证链接，请手动访问完成验证：\n{ev['url']}"
+                )
+                continue
+            if t == "status":
+                st = ev.get("status")
+                if st is QRStatus.NOT_SCANNED:
+                    logger.info("等待微信扫码...（请打开微信扫一扫）")
+                elif st is QRStatus.SCANNED:
+                    logger.info("已扫码！请在手机微信上点【登录】确认")
+                continue
+            if t == "network_warning":
+                logger.warning(
+                    f"网络异常({ev.get('failures')})：{ev.get('message')}"
+                )
+                continue
+            if t == "poll_error":
+                logger.exception(
+                    f"检查二维码异常({ev.get('failures')})：{ev.get('message')}"
+                )
+                continue
+            if t == "success":
+                wxid = ev["wxid"]
+                nickname = ev.get("nickname") or ""
+                logger.success(f"登录成功！wxid={wxid} ({nickname})")
+                return wxid
+            if t == "expired":
+                logger.error("二维码已过期")
+                raise LoginError(ev.get("message") or "二维码已过期")
+            if t == "canceled":
+                logger.error("二维码已被取消")
+                raise LoginError(ev.get("message") or "二维码已被取消")
+            if t == "api_error":
+                msg = ev.get("message") or "未知错误"
+                logger.error(f"登录失败: {msg}")
+                raise LoginError(f"登录失败: {msg}")
+            if t == "login_error":
+                raise LoginError(ev.get("message") or "登录失败")
+            if t == "timeout":
+                raise asyncio.TimeoutError(
+                    ev.get("message") or "二维码登录超时"
+                )
+            if t == "stopped":
+                raise LoginError(ev.get("message") or "监听已取消")
 
-                        ret, err_msg = _extract_ret_errmsg(payload)
-                        logger.debug(f"QRCheck response: ret={ret}, errMsg={err_msg}, data={payload}")
-
-                        # 1) 成功：ret=0 且有 userName
-                        wxid, nickname = _extract_login_user(payload)
-                        if ret == 0 and wxid:
-                            logger.success(f"登录成功！wxid={wxid} ({nickname})")
-                            return wxid
-
-                        # 2) 过期：直接异常退出
-                        if ret == QRStatus.EXPIRED:
-                            logger.error("二维码已过期")
-                            raise LoginError("二维码已过期")
-
-                        # 3) 解析扫码状态（允许 extra，不影响 verifyUrl）
-                        qr = QRCheckResponse.model_validate(payload)
-
-                        # 4) verifyUrl：不依赖状态变化，只要出现/变化就提示一次
-                        verify_url = getattr(qr, "verifyUrl", None) or payload.get("verifyUrl")
-                        if verify_url and verify_url != last_verify_url:
-                            logger.warning(f"检测到安全验证链接，请手动访问完成验证：\n{verify_url}")
-                            last_verify_url = verify_url
-
-                        # 5) 状态机提示：只在状态变化时输出
-                        status_val = getattr(qr, "status", None)
-                        current_status: Optional["QRStatus"] = None
-                        if status_val is not None:
-                            current_status = QRStatus(status_val)
-
-                        if current_status is not None and current_status != last_status:
-                            if current_status is QRStatus.NOT_SCANNED:
-                                logger.info("等待微信扫码...（请打开微信扫一扫）")
-                            elif current_status is QRStatus.SCANNED:
-                                # 扫码了但未确认
-                                logger.info("已扫码！请在手机微信上点【登录】确认")
-                            elif current_status is QRStatus.CANCELED:
-                                logger.error("二维码已被取消")
-                                raise LoginError("二维码已被取消")
-                            last_status = current_status
-
-                        # 6) 其它 ret 错误：只有 ret 明确非 0 才算“失败”
-                        if ret is not None and ret != 0:
-                            logger.error(f"登录失败 ret={ret}, msg={err_msg or '未知错误'}")
-                            raise LoginError(f"登录失败: {err_msg or 'ret=' + str(ret)}")
-
-                    except LoginError:
-                        raise
-                    except (ConnectError, NetworkError, TimeoutException) as e:
-                        # 网络异常：warning + 退避（避免刷屏）
-                        net_failures += 1
-                        logger.warning(f"网络异常({net_failures})：{e}")
-                    except Exception as e:
-                        # 其它异常：带堆栈，但不让它疯狂刷屏（同样用退避）
-                        net_failures += 1
-                        logger.exception(f"检查二维码异常({net_failures})：{e}")
-
-                    # 退避睡眠：interval * 2^k，上限 30s（你可调）
-                    backoff = min(30.0, interval * (2 ** min(net_failures, 3)))
-                    await asyncio.sleep(max(0.2, backoff))
-
-        except TimeoutError:
-            # asyncio.timeout 抛的是 TimeoutError，这里换成你想要的信息
-            raise asyncio.TimeoutError("二维码登录超时")
+        raise LoginError("二维码登录未完成")
 
     async def stream_qr_status(
         self,
@@ -175,133 +297,89 @@ class LoginClient:
         stop_event: Optional[asyncio.Event] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """
-        异步迭代 QRCheck 轮询结果，供 WebSocket 推送扫码状态（替代阻塞版 check_qr_code）。
-        事件类型：poll | status | verify_url | success | error | stopped
+        异步迭代 QRCheck 轮询结果，供 WebSocket 推送扫码状态。
+        事件类型：poll | status | verify_url | success | error | stopped | warning
         """
-        last_status: Optional[QRStatus] = None
-        last_verify_url: Optional[str] = None
-        net_failures = 0
 
-        def phase_for(status_val: Optional[int]) -> str:
-            if status_val is None:
-                return "unknown"
-            try:
-                st = QRStatus(status_val)
-            except ValueError:
-                return "unknown"
-            return {
-                QRStatus.NOT_SCANNED: "waiting",
-                QRStatus.SCANNED: "scanned",
-                QRStatus.CONFIRMING: "confirming",
-                QRStatus.CANCELED: "canceled",
-            }.get(st, "unknown")
+        async def _fetch() -> dict:
+            return await self.t.post(f"/Login/QRCheck?uuid={uuid}")
 
-        try:
-            async with asyncio.timeout(timeout):
-                poll_seq = 0
-                while True:
-                    if stop_event is not None and stop_event.is_set():
-                        yield {"event": "stopped", "message": "监听已取消"}
-                        return
-                    try:
-                        payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
-                        net_failures = 0
-                        poll_seq += 1
-
-                        ret, err_msg = _extract_ret_errmsg(payload)
-                        wxid, nickname = _extract_login_user(payload)
-
-                        yield {
-                            "event": "poll",
-                            "seq": poll_seq,
-                            "ret": ret,
-                            "err_msg": err_msg,
-                        }
-
-                        if ret == 0 and wxid:
-                            yield {
-                                "event": "success",
-                                "wxid": wxid,
-                                "nickname": nickname or "",
-                            }
-                            return
-
-                        if ret == QRStatus.EXPIRED:
-                            yield {
-                                "event": "error",
-                                "code": "expired",
-                                "message": "二维码已过期",
-                            }
-                            return
-
-                        qr = QRCheckResponse.model_validate(payload)
-                        verify_url = getattr(qr, "verifyUrl", None) or payload.get(
-                            "verifyUrl"
-                        )
-                        status_val = getattr(qr, "status", None)
-                        current_status: Optional[QRStatus] = None
-                        if status_val is not None:
-                            try:
-                                current_status = QRStatus(status_val)
-                            except ValueError:
-                                current_status = None
-
-                        if verify_url and verify_url != last_verify_url:
-                            yield {"event": "verify_url", "url": verify_url}
-                            last_verify_url = verify_url
-
-                        status_changed = current_status != last_status
-                        if status_changed:
-                            yield {
-                                "event": "status",
-                                "phase": phase_for(status_val),
-                                "raw_status": status_val,
-                                "ret": ret,
-                            }
-                            last_status = current_status
-
-                        if current_status is QRStatus.CANCELED:
-                            yield {
-                                "event": "error",
-                                "code": "canceled",
-                                "message": "二维码已被取消",
-                            }
-                            return
-
-                        if ret is not None and ret != 0:
-                            yield {
-                                "event": "error",
-                                "code": "api",
-                                "message": err_msg or f"ret={ret}",
-                                "ret": ret,
-                            }
-                            return
-
-                    except LoginError as e:
-                        yield {"event": "error", "code": "login", "message": str(e)}
-                        return
-                    except (ConnectError, NetworkError, TimeoutException) as e:
-                        net_failures += 1
-                        yield {
-                            "event": "warning",
-                            "code": "network",
-                            "message": str(e),
-                            "failures": net_failures,
-                        }
-                    except Exception as e:
-                        net_failures += 1
-                        yield {
-                            "event": "warning",
-                            "code": "poll_error",
-                            "message": str(e),
-                            "failures": net_failures,
-                        }
-
-                    backoff = min(30.0, interval * (2 ** min(net_failures, 3)))
-                    await asyncio.sleep(max(0.2, backoff))
-
-        except TimeoutError:
-            yield {"event": "error", "code": "timeout", "message": "二维码登录超时"}
+        async for ev in _iter_qr_poll(
+            _fetch,
+            interval=interval,
+            timeout=timeout,
+            stop_event=stop_event,
+        ):
+            t = ev["type"]
+            if t == "poll":
+                yield {
+                    "event": "poll",
+                    "seq": ev["seq"],
+                    "ret": ev["ret"],
+                    "err_msg": ev["err_msg"],
+                }
+            elif t == "success":
+                yield {
+                    "event": "success",
+                    "wxid": ev["wxid"],
+                    "nickname": ev.get("nickname") or "",
+                }
+            elif t == "expired":
+                yield {
+                    "event": "error",
+                    "code": "expired",
+                    "message": ev.get("message"),
+                }
+            elif t == "canceled":
+                yield {
+                    "event": "error",
+                    "code": "canceled",
+                    "message": ev.get("message"),
+                }
+            elif t == "api_error":
+                yield {
+                    "event": "error",
+                    "code": "api",
+                    "message": ev.get("message"),
+                    "ret": ev.get("ret"),
+                }
+            elif t == "login_error":
+                yield {
+                    "event": "error",
+                    "code": "login",
+                    "message": ev.get("message"),
+                }
+            elif t == "timeout":
+                yield {
+                    "event": "error",
+                    "code": "timeout",
+                    "message": ev.get("message"),
+                }
+            elif t == "stopped":
+                yield {"event": "stopped", "message": ev.get("message")}
+            elif t == "verify_url":
+                yield {"event": "verify_url", "url": ev["url"]}
+            elif t == "status":
+                yield {
+                    "event": "status",
+                    "phase": ev["phase"],
+                    "raw_status": ev["raw_status"],
+                    "ret": ev["ret"],
+                }
+            elif t == "network_warning":
+                yield {
+                    "event": "warning",
+                    "code": "network",
+                    "message": ev.get("message"),
+                    "failures": ev.get("failures"),
+                }
+            elif t == "poll_error":
+                yield {
+                    "event": "warning",
+                    "code": "poll_error",
+                    "message": ev.get("message"),
+                    "failures": ev.get("failures"),
+                }
 
     # ==================== 永久心跳（支持重复登录） ====================
     async def _heartbeat_worker(self, interval: int = 60) -> None:
@@ -464,18 +542,25 @@ class LoginClient:
 
     async def sec_auto_login(self) -> bool:
         try:
-            payload: dict =  await self.t.post("/Login/SecAutoAuth")
+            payload: dict = await self.t.post("/Login/SecAutoAuth")
             ret, err_msg = _extract_ret_errmsg(payload)
-           # logger.debug(f"SecAutoAuth response: ret={ret}, errMsg={err_msg}, data={payload}")
             if ret != 0:
-                logger.error(f"二次免扫码登录失败: ret={ret}, msg={err_msg or '未知错误'}")
+                logger.debug(
+                    f"二次免扫码登录未成功: ret={ret}, msg={err_msg or '未知错误'}"
+                )
                 return False
-            
-            
-            logger.success("二次免扫码登录成功？")
+
+            logger.success("二次免扫码登录成功")
             return True
-        except (ApiError, HttpError) as e:
-            logger.error(f"二次登录失败: {e}")
+        except ApiError as e:
+            # 缓存失效等为正常路径，随后会改走扫码
+            if e.code == -1019 or "缓存" in (e.message or ""):
+                logger.debug(f"二次登录缓存不可用: {e.message}")
+            else:
+                logger.warning(f"二次登录失败: {e}")
+            return False
+        except HttpError as e:
+            logger.warning(f"二次登录网络异常: {e}")
             return False
 
     async def awaken(self) -> bool:

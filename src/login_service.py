@@ -87,7 +87,10 @@ class LoginService:
                 wxid = ev.get("wxid")
                 break
             if ev.get("event") == "error":
-                raise LoginError(ev.get("message") or ev.get("code") or "二维码登录失败")
+                raise LoginError(
+                    ev.get("message") or str(ev.get("code") or "二维码登录失败"),
+                    reason=str(ev.get("code") or ""),
+                )
         if not wxid:
             raise LoginError("登录未完成或已中断")
 

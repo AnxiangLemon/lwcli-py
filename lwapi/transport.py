@@ -69,7 +69,12 @@ class AsyncHTTPTransport:
             raise ApiError(-1, f"response format error: {e}")
 
         if api_resp.code != 200:
-            logger.error(f"API error [{api_resp.code}] {path}: {api_resp.message}")
-            raise ApiError(api_resp.code, api_resp.message or "unknown error")
+            msg = api_resp.message or "unknown error"
+            # 二次登录缓存失效为正常分支，随后会走扫码
+            if path.rstrip("/").endswith("SecAutoAuth") and api_resp.code == -1019:
+                logger.debug(f"API [{api_resp.code}] {path}: {msg}")
+            else:
+                logger.error(f"API error [{api_resp.code}] {path}: {msg}")
+            raise ApiError(api_resp.code, msg)
 
         return api_resp.data  # 类型自动推断为 _T，完美！
