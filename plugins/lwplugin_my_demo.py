@@ -15,7 +15,7 @@ from lwapi.models.msg import SyncMessageResponse
 from src.plugins.bot_tasks import spawn_bot_task
 from src.runtime.client_registry import get_client, iter_online_clients, require_client
 
-PLUGIN_ID = "my_hello"
+PLUGIN_ID = "my_demo"
 PLUGIN_TITLE = "示例：全事件 Demo"
 PLUGIN_DESCRIPTION = (
     "包括所有的事件类型示例：消息驱动、上线协程、启动后调度、主动 require_client、进程级后台；"
@@ -50,18 +50,12 @@ def _filled(s: str) -> bool:
 
 
 async def handle(client: LwApiClient, resp: SyncMessageResponse) -> None:
-    """1. 消息驱动：私聊「测试」时回复。"""
+    """1. 消息驱动：打印收到的消息。"""
     for msg in resp.addMsgs or []:
-        if msg.msgType != 1:
-            continue
         content = (msg.content.string or "").strip()
         sender = (msg.fromUserName.string or "").strip()
-        if content == "测试":
-            logger.info(f"[{PLUGIN_ID}] reply to {sender}")
-            await client.msg.send_text_message(
-                to_wxid=sender, content="插件已收到：测试"
-            )
-
+        wxid = client.wxid
+        logger.info(f"[{PLUGIN_ID}] wxid={wxid} 收到消息 from={sender} content={content}")
 
 async def _active_send_demo() -> None:
     """2. 按 wxid 主动发送（require_client）。"""
