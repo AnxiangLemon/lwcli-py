@@ -184,7 +184,7 @@
       <div class="card">
         <h2>插件列表</h2>
         <p class="subtitle" style="margin-top:0;margin-bottom:10px;color:var(--muted-dim)">
-          已启用插件按下列从上到下依次处理消息；可用 ↑↓ 调整顺序。插件 <code>handle</code> 返回 <code>False</code> 时不再执行后续插件。
+          已启用插件按下列从上到下依次处理消息（左侧序号即执行顺序）；可用 ↑↓ 调整。插件可在代码中设置 <code>PLUGIN_ICON</code>（emoji）作为头像。
         </p>
         <div id="plugins-exec-chain" class="plugins-exec-chain" hidden>
           <p class="plugins-exec-chain-label">当前执行链</p>
@@ -1024,6 +1024,34 @@
       return ordered;
     }
 
+    function pluginHueFromId(id) {
+      var h = 0;
+      var s = String(id || '');
+      for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return h % 360;
+    }
+
+    function pluginAvatarInner(p) {
+      var icon = p && p.icon ? String(p.icon).trim() : '';
+      if (icon) return icon;
+      var t = (p && (p.title || p.id)) || '?';
+      return String(t).trim().charAt(0).toUpperCase() || '?';
+    }
+
+    function buildPluginAvatarHtml(p) {
+      var hue = pluginHueFromId(p.id);
+      var isEmoji = p && p.icon && String(p.icon).trim();
+      return (
+        '<div class="plugin-card-avatar' +
+        (isEmoji ? ' plugin-card-avatar--emoji' : '') +
+        '" style="--plugin-hue:' +
+        hue +
+        'deg" aria-hidden="true"><span class="plugin-card-avatar-inner">' +
+        esc(pluginAvatarInner(p)) +
+        '</span></div>'
+      );
+    }
+
     function refreshPluginOrderUi() {
       var host = document.getElementById('plugins-list');
       if (!host) return;
@@ -1031,8 +1059,9 @@
       var total = enabledCards.length;
       enabledCards.forEach(function (card, i) {
         var n = i + 1;
-        var badge = card.querySelector('.plugin-order-badge');
-        if (badge) badge.textContent = String(n);
+        card.classList.toggle('plugin-card--chain-last', n === total);
+        var railNum = card.querySelector('.plugin-card-rail-num');
+        if (railNum) railNum.textContent = String(n);
         var up = card.querySelector('.plugin-icon-btn[data-move="-1"]');
         var down = card.querySelector('.plugin-icon-btn[data-move="1"]');
         if (up) up.disabled = n === 1;
@@ -1051,14 +1080,17 @@
       enabledCards.forEach(function (card, i) {
         if (i > 0) parts.push('<span class="plugins-chain-arrow" aria-hidden="true">→</span>');
         var titleEl = card.querySelector('.plugin-card-title');
-        var id = card.getAttribute('data-plugin-id') || '';
-        var label = titleEl ? titleEl.textContent : id;
+        var avatarEl = card.querySelector('.plugin-card-avatar-inner');
+        var label = titleEl ? titleEl.textContent : '';
+        var av = avatarEl ? avatarEl.textContent : '';
         parts.push(
-          '<span class="plugins-chain-step"><span class="plugin-order-badge">' +
-            (i + 1) +
-            '</span> ' +
+          '<span class="plugins-chain-step">' +
+            '<span class="plugins-chain-avatar">' +
+            esc(av) +
+            '</span>' +
+            '<span class="plugins-chain-label">' +
             esc(label) +
-            '</span>'
+            '</span></span>'
         );
       });
       flow.innerHTML = parts.join('');
@@ -1068,14 +1100,16 @@
       var author = (p.author && String(p.author).trim()) || 'LWAPI';
       var vs = fmtPluginVersion(p.version);
       var pid = esc(p.id);
-      var orderBadge =
+      var rail =
         on && orderIndex != null
-          ? '<span class="plugin-order-badge" title="执行顺序">' + orderIndex + '</span>'
+          ? '<div class="plugin-card-rail" aria-hidden="true"><span class="plugin-card-rail-num">' +
+            orderIndex +
+            '</span><span class="plugin-card-rail-line"></span></div>'
           : '';
       var reorderBtns = '';
       if (on) {
         reorderBtns =
-          '<div class="plugin-card-actions">' +
+          '<div class="plugin-card-reorder">' +
           '<button type="button" class="plugin-icon-btn" title="上移" data-move="-1" onclick="movePluginOrder(\'' +
           pid +
           '\', -1)">↑</button>' +
@@ -1086,25 +1120,27 @@
       }
       return (
         '<article class="plugin-card' + (on ? ' is-enabled' : '') + '" data-plugin-id="' + pid + '">' +
+        rail +
+        '<div class="plugin-card-main">' +
         '<div class="plugin-card-top">' +
-        orderBadge +
-        '<div class="plugin-card-icon" aria-hidden="true"></div>' +
+        buildPluginAvatarHtml(p) +
         '<div class="plugin-card-head-text">' +
         '<h3 class="plugin-card-title">' + esc(p.title) + '</h3>' +
         '<p class="plugin-card-author"><code class="plugin-card-plugin-id">' + pid + '</code><span class="plugin-card-by"> · by ' + esc(author) + '</span></p></div>' +
         '<span class="plugin-card-status ' + (on ? 'is-on' : 'is-off') + '">' + (on ? '运行中' : '未运行') + '</span>' +
-        reorderBtns +
         '</div>' +
         '<p class="plugin-card-desc">' + esc(p.description || '') + '</p>' +
         '<div class="plugin-card-bottom">' +
         '<span class="plugin-card-ver">v' + esc(vs) + '</span>' +
+        '<div class="plugin-card-bottom-actions">' +
         '<div class="plugin-card-toggle-row">' +
         '<label class="plugin-toggle">' +
         '<input type="checkbox" class="plugin-enable" data-plugin-id="' + pid + '"' + (on ? ' checked' : '') + ' onchange="onPluginToggle(event)" />' +
         '<span class="plugin-toggle-ui"></span>' +
         '<span class="plugin-toggle-label">' + (on ? '已启用' : '未启用') + '</span>' +
         '</label></div>' +
-        '</div></article>'
+        reorderBtns +
+        '</div></div></div></article>'
       );
     }
 
@@ -1150,41 +1186,10 @@
       var input = ev.target;
       if (!input || !input.classList.contains('plugin-enable')) return;
       var revertTo = !input.checked;
-      var host = document.getElementById('plugins-list');
       try {
-        var on = input.checked;
-        var card = input.closest('.plugin-card');
-        if (card && host) {
-          card.classList.toggle('is-enabled', on);
-          if (on) {
-            host.appendChild(card);
-            var pid = card.getAttribute('data-plugin-id');
-            var meta = _pluginCatalog.find(function (p) {
-              return p.id === pid;
-            });
-            var order = host.querySelectorAll('.plugin-card.is-enabled').length;
-            var tmp = document.createElement('div');
-            tmp.innerHTML = buildPluginCardHtml(meta || { id: pid, title: pid }, true, order);
-            var fresh = tmp.firstElementChild;
-            card.replaceWith(fresh);
-            card = fresh;
-          } else {
-            var badge = card.querySelector('.plugin-order-badge');
-            if (badge) badge.remove();
-            var actions = card.querySelector('.plugin-card-actions');
-            if (actions) actions.remove();
-          }
-          var st = card.querySelector('.plugin-card-status');
-          var lab = card.querySelector('.plugin-toggle-label');
-          if (st) {
-            st.textContent = on ? '运行中' : '未运行';
-            st.className = 'plugin-card-status ' + (on ? 'is-on' : 'is-off');
-          }
-          if (lab) lab.textContent = on ? '已启用' : '未启用';
-        }
-        refreshPluginOrderUi();
         await persistPlugins();
-        showToast(on ? '启用成功' : '已禁用');
+        await loadPluginsPanel();
+        showToast(input.checked ? '启用成功' : '已禁用');
       } catch (e) {
         alert(e.message);
         input.checked = revertTo;

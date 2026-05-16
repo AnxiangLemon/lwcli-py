@@ -33,6 +33,7 @@ class PluginSpec:
     handle: MessageHandler
     version: str = "1.0.0"
     author: str = ""
+    icon: str = ""
     on_app_ready: Optional[AppReadyHandler] = None
     on_bot_online: Optional[BotOnlineHandler] = None
     on_bot_offline: Optional[BotOfflineHandler] = None

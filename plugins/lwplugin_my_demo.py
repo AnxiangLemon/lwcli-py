@@ -18,10 +18,11 @@ from src.runtime.client_registry import get_client, iter_online_clients, require
 PLUGIN_ID = "my_demo"
 PLUGIN_TITLE = "示例：全事件 Demo"
 PLUGIN_DESCRIPTION = (
-    "包括所有的事件类型示例：消息驱动、上线协程、启动后调度、主动 require_client、进程级后台；"
+    "包括所有的事件类型示例：消息驱动、上线协程、启动后调度、主动 require_client、进程级后台；括所有的事件类型示例：消息驱动、上线协程、启动后调度、主动 require_client、进程级后台；括所有的事件类型示例：消息驱动、上线协程、启动后调度、主动 require_client、进程级后台；"
 )
 PLUGIN_VERSION = "1.0.0"
 PLUGIN_AUTHOR = "LWAPI"
+PLUGIN_ICON = "⚡"
 
 # ---------------------------------------------------------------------------
 # 配置区（按需填写，留空 "" 则跳过对应 demo）

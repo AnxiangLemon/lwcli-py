@@ -22,6 +22,7 @@ PLUGIN_DESCRIPTION = (
 )
 PLUGIN_VERSION = "1.0.0"
 PLUGIN_AUTHOR = "LWAPI"
+PLUGIN_ICON = "💬"
 
 _TZ = ZoneInfo("Asia/Shanghai")
 _GROUP_CMD_PREFIX = "#"

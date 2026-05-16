@@ -250,6 +250,7 @@ class AdminWebApp:
                         "description": p.description,
                         "version": p.version,
                         "author": p.author,
+                        "icon": p.icon,
                     }
                     for p in specs
                 ],

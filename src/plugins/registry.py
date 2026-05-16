@@ -39,6 +39,7 @@ def _spec_from_module(module: object, *, source: str) -> Optional[PluginSpec]:
         logger.warning(f"插件模块 {source} 缺少可调用 handle，已跳过")
         return None
     title = getattr(module, "PLUGIN_TITLE", None) or pid
+    icon_raw = getattr(module, "PLUGIN_ICON", None)
     desc = getattr(module, "PLUGIN_DESCRIPTION", None) or ""
     def _optional_hook(name: str):
         fn = getattr(module, name, None)
@@ -51,6 +52,7 @@ def _spec_from_module(module: object, *, source: str) -> Optional[PluginSpec]:
         handle=handle,
         version=str(getattr(module, "PLUGIN_VERSION", "1.0.0")),
         author=str(getattr(module, "PLUGIN_AUTHOR", "") or ""),
+        icon=str(icon_raw or "").strip(),
         on_app_ready=_optional_hook("on_app_ready"),
         on_bot_online=_optional_hook("on_bot_online"),
         on_bot_offline=_optional_hook("on_bot_offline"),
