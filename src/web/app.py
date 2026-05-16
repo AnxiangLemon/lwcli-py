@@ -18,13 +18,17 @@ from lwapi.exceptions import ApiError, HttpError
 from src.app_paths import static_dir
 from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
 from src.device_id import device_id_error_message, normalize_device_id
-from src.message_inbox import query_list, query_summary
+from src.message_inbox import clear_inbox, query_list, query_summary
 from src.plugins.lifecycle import plugin_background_lifespan
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
-from src.utils import read_account_today_log_tail, effective_account_remark
+from src.utils import (
+    clear_account_today_log,
+    effective_account_remark,
+    read_account_today_log_tail,
+)
 
 STATIC_DIR = static_dir()
 
@@ -48,6 +52,7 @@ class AdminWebApp:
                 web.put("/api/accounts/{idx}", self.api_account_update),
                 web.delete("/api/accounts/{idx}", self.api_account_delete),
                 web.get("/api/accounts/{idx}/log", self.api_account_log),
+                web.delete("/api/accounts/{idx}/log", self.api_account_log_clear),
                 web.get("/ws/account/{idx}", self.ws_account),
                 web.post("/api/accounts/{idx}/start", self.api_start_one),
                 web.post("/api/accounts/{idx}/stop", self.api_stop_one),
@@ -57,6 +62,7 @@ class AdminWebApp:
                 web.get("/api/messages/summary", self.api_messages_summary),
                 web.get("/api/messages", self.api_messages_list),
                 web.post("/api/messages/send", self.api_messages_send),
+                web.delete("/api/messages", self.api_messages_clear),
             ]
         )
         return app
@@ -96,6 +102,17 @@ class AdminWebApp:
         remark = effective_account_remark(acc)
         payload = read_account_today_log_tail(remark, lines=n)
         return web.json_response(payload)
+
+    async def api_account_log_clear(self, request: web.Request) -> web.Response:
+        idx = int(request.match_info["idx"])
+        accounts = load_accounts_safe()
+        if idx < 0 or idx >= len(accounts):
+            return web.json_response({"error": "账号不存在"}, status=404)
+        remark = effective_account_remark(accounts[idx])
+        payload = clear_account_today_log(remark)
+        if payload.get("error"):
+            return web.json_response({"error": payload["error"]}, status=500)
+        return web.json_response({"ok": True, **payload})
 
     async def api_account_create(self, request: web.Request) -> web.Response:
         try:
@@ -291,6 +308,20 @@ class AdminWebApp:
         return web.json_response(
             {"items": items, "total": total, "msg_sync_mode": DEFAULT_MSG_SYNC_MODE}
         )
+
+    async def api_messages_clear(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        confirm = str(body.get("confirm") or "").strip()
+        if confirm != "确认删除":
+            return web.json_response(
+                {"error": "请在 confirm 字段输入「确认删除」"},
+                status=400,
+            )
+        deleted = await clear_inbox()
+        return web.json_response({"ok": True, "deleted": deleted})
 
     async def api_messages_send(self, request: web.Request) -> web.Response:
         try:

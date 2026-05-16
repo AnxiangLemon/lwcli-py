@@ -100,6 +100,7 @@
             <button type="button" class="btn btn-primary" onclick="runMsgSearch()">搜索</button>
             <button type="button" class="btn btn-ghost" onclick="clearMsgSearch()">清除关键词</button>
             <button type="button" class="btn" onclick="loadMessagesPanel(true)">刷新</button>
+            <button type="button" class="btn btn-danger" onclick="confirmClearAllMessages()">清空全部消息</button>
           </div>
         </div>
         <div class="msg-inbox-layout">
@@ -169,6 +170,7 @@
         <div class="log-toolbar">
           <select id="log-account-select" class="log-select" aria-label="选择账号"></select>
           <button type="button" class="btn btn-primary" onclick="loadLogForSelected()">刷新日志</button>
+          <button type="button" class="btn btn-danger" onclick="confirmClearLog()">清空日志</button>
         </div>
         <pre id="log-page-pre" class="log-page-pre">请选择账号后点击「刷新日志」。</pre>
       </div>
@@ -233,9 +235,21 @@
         <h2 id="app-modal-confirm-title" class="app-modal-title">确认删除</h2>
         <p class="app-modal-sub" id="app-modal-confirm-msg"></p>
         <input type="hidden" id="modal-confirm-index" value="" />
+        <input type="hidden" id="modal-confirm-action" value="" />
+        <div id="app-modal-confirm-phrase-wrap" class="modal-field" hidden>
+          <label for="app-modal-confirm-phrase">请输入「确认删除」以继续</label>
+          <input
+            type="text"
+            id="app-modal-confirm-phrase"
+            class="modal-input"
+            autocomplete="off"
+            spellcheck="false"
+            oninput="onConfirmPhraseInput()"
+          />
+        </div>
         <div class="app-modal-actions app-modal-actions-end">
           <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
-          <button type="button" class="btn btn-danger" id="modal-confirm-delete-btn" onclick="submitDeleteAccount()">删除</button>
+          <button type="button" class="btn btn-danger" id="modal-confirm-delete-btn" onclick="submitModalConfirm()">删除</button>
         </div>
       </div>
     </div>
@@ -245,6 +259,7 @@
 
   <script>
     const accountWs = {};
+    const CONFIRM_DELETE_PHRASE = '确认删除';
 
     const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: '日志', plugins: '插件管理' };
 
@@ -638,6 +653,56 @@
       root.classList.remove('is-open');
       root.setAttribute('aria-hidden', 'true');
       document.removeEventListener('keydown', onAppModalKeydown);
+      resetConfirmModal();
+    }
+
+    function resetConfirmModal() {
+      var phrase = document.getElementById('app-modal-confirm-phrase');
+      var wrap = document.getElementById('app-modal-confirm-phrase-wrap');
+      var btn = document.getElementById('modal-confirm-delete-btn');
+      if (phrase) phrase.value = '';
+      if (wrap) wrap.hidden = true;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '删除';
+      }
+      var action = document.getElementById('modal-confirm-action');
+      if (action) action.value = '';
+    }
+
+    function onConfirmPhraseInput() {
+      var actionEl = document.getElementById('modal-confirm-action');
+      if (!actionEl || actionEl.value !== 'clear-messages') return;
+      var inp = document.getElementById('app-modal-confirm-phrase');
+      var btn = document.getElementById('modal-confirm-delete-btn');
+      if (btn && inp) btn.disabled = inp.value.trim() !== CONFIRM_DELETE_PHRASE;
+    }
+
+    function openConfirmModal(opts) {
+      resetConfirmModal();
+      document.getElementById('app-modal-edit').hidden = true;
+      document.getElementById('app-modal-confirm').hidden = false;
+      var panel = document.querySelector('.app-modal-panel');
+      if (panel) panel.setAttribute('aria-labelledby', 'app-modal-confirm-title');
+      document.getElementById('modal-confirm-action').value = opts.action || '';
+      document.getElementById('app-modal-confirm-title').textContent = opts.title || '确认';
+      document.getElementById('app-modal-confirm-msg').textContent = opts.message || '';
+      var btn = document.getElementById('modal-confirm-delete-btn');
+      if (btn) btn.textContent = opts.confirmBtn || '确认';
+      if (opts.requirePhrase) {
+        document.getElementById('app-modal-confirm-phrase-wrap').hidden = false;
+        if (btn) btn.disabled = true;
+        openAppModal();
+        setTimeout(function () {
+          var el = document.getElementById('app-modal-confirm-phrase');
+          if (el) el.focus();
+        }, 30);
+      } else {
+        openAppModal();
+        setTimeout(function () {
+          if (btn) btn.focus();
+        }, 30);
+      }
     }
 
     function onAppModalKeydown(ev) {
@@ -658,44 +723,113 @@
     async function deleteAccount(index) {
       var acc = _lastAccountsPayload[index];
       var label = acc ? (acc.remark || '').trim() || (acc.device_id || '').slice(0, 12) || '账号' + index : '账号 #' + index;
-      document.getElementById('app-modal-edit').hidden = true;
-      document.getElementById('app-modal-confirm').hidden = false;
-      var panel = document.querySelector('.app-modal-panel');
-      if (panel) panel.setAttribute('aria-labelledby', 'app-modal-confirm-title');
       document.getElementById('modal-confirm-index').value = String(index);
-      document.getElementById('app-modal-confirm-msg').textContent =
-        '确定删除「' + label + '」？需已停止运行。此操作不可撤销。';
-      openAppModal();
-      setTimeout(function () {
-        var b = document.getElementById('modal-confirm-delete-btn');
-        if (b) b.focus();
-      }, 30);
+      openConfirmModal({
+        action: 'delete-account',
+        title: '确认删除',
+        message: '确定删除「' + label + '」？需已停止运行。此操作不可撤销。',
+        confirmBtn: '删除',
+      });
     }
 
-    async function submitDeleteAccount() {
-      var index = parseInt(document.getElementById('modal-confirm-index').value, 10);
-      if (isNaN(index)) {
-        closeAppModal();
+    function confirmClearLog() {
+      var sel = document.getElementById('log-account-select');
+      if (!sel || sel.value === '' || sel.value == null) {
+        showToast('请先选择账号', 'warning');
         return;
       }
+      var idx = sel.value;
+      var acc = _lastAccountsPayload && _lastAccountsPayload[idx];
+      var label = acc
+        ? (acc.remark || '').trim() || (acc.device_id || '').slice(0, 12) || '账号' + idx
+        : '账号 #' + idx;
+      openConfirmModal({
+        action: 'clear-log',
+        title: '清空日志',
+        message: '确定清空「' + label + '」今日日志？此操作不可撤销。',
+        confirmBtn: '清空',
+      });
+    }
+
+    async function confirmClearAllMessages() {
+      var total = 0;
+      try {
+        var summ = await fetchJson('/api/messages/summary');
+        total = summ.total || 0;
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+      openConfirmModal({
+        action: 'clear-messages',
+        title: '清空全部消息',
+        message:
+          '将永久删除数据库中的全部 ' +
+          total +
+          ' 条消息记录（config/messages.sqlite），不可恢复。请在下方输入「' +
+          CONFIRM_DELETE_PHRASE +
+          '」。',
+        requirePhrase: true,
+        confirmBtn: '确认删除',
+      });
+    }
+
+    async function submitModalConfirm() {
+      var action = (document.getElementById('modal-confirm-action').value || '').trim();
       var delBtn = document.getElementById('modal-confirm-delete-btn');
       if (delBtn) delBtn.disabled = true;
       try {
-        await fetchJson('/api/accounts/' + index, { method: 'DELETE' });
-        var ws = accountWs[index];
-        if (ws) {
-          try {
-            ws.close();
-          } catch (e) {}
-          delete accountWs[index];
+        if (action === 'delete-account') {
+          var index = parseInt(document.getElementById('modal-confirm-index').value, 10);
+          if (isNaN(index)) {
+            closeAppModal();
+            return;
+          }
+          await fetchJson('/api/accounts/' + index, { method: 'DELETE' });
+          var ws = accountWs[index];
+          if (ws) {
+            try {
+              ws.close();
+            } catch (e) {}
+            delete accountWs[index];
+          }
+          closeAppModal();
+          await refreshAccounts({ soft: false });
+          showToast('已删除');
+        } else if (action === 'clear-log') {
+          var sel = document.getElementById('log-account-select');
+          var idx = sel ? sel.value : '';
+          if (idx === '' || idx == null) {
+            showToast('请先选择账号', 'warning');
+            return;
+          }
+          await fetchJson('/api/accounts/' + idx + '/log', { method: 'DELETE' });
+          closeAppModal();
+          showToast('日志已清空', 'success');
+          await loadLogForSelected();
+        } else if (action === 'clear-messages') {
+          var phrase = (document.getElementById('app-modal-confirm-phrase').value || '').trim();
+          if (phrase !== CONFIRM_DELETE_PHRASE) {
+            showToast('请输入「' + CONFIRM_DELETE_PHRASE + '」', 'warning');
+            onConfirmPhraseInput();
+            return;
+          }
+          var res = await fetchJson('/api/messages', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: phrase }),
+          });
+          closeAppModal();
+          showToast('已清空 ' + (res.deleted != null ? res.deleted : 0) + ' 条消息', 'success');
+          await loadMessagesPanel(true);
         }
-        closeAppModal();
-        await refreshAccounts({ soft: false });
-        showToast('已删除');
       } catch (e) {
         alert(e.message);
       } finally {
-        if (delBtn) delBtn.disabled = false;
+        if (delBtn) {
+          if (action === 'clear-messages') onConfirmPhraseInput();
+          else delBtn.disabled = false;
+        }
       }
     }
 
@@ -720,6 +854,7 @@
         }
       }
       if (!acc) return;
+      resetConfirmModal();
       document.getElementById('app-modal-edit').hidden = false;
       document.getElementById('app-modal-confirm').hidden = true;
       var panel = document.querySelector('.app-modal-panel');

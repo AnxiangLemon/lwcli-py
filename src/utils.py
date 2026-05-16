@@ -108,6 +108,22 @@ def read_account_today_log_tail(remark: str, lines: int = 50) -> Dict[str, Any]:
     }
 
 
+def clear_account_today_log(remark: str) -> Dict[str, Any]:
+    """清空当日该备注对应日志文件内容。"""
+    path = account_log_file_path(remark)
+    if not path.exists():
+        return {
+            "path": str(path.resolve()),
+            "cleared": False,
+            "message": "今日尚无此日志文件",
+        }
+    try:
+        path.write_text("", encoding="utf-8")
+    except OSError as e:
+        return {"path": str(path.resolve()), "cleared": False, "error": str(e)}
+    return {"path": str(path.resolve()), "cleared": True}
+
+
 def atomic_write_json(path: Path, data) -> None:
     """先写临时文件再 replace，降低并发写 JSON 时文件半写入的概率。"""
     text = json.dumps(data, indent=2, ensure_ascii=False)

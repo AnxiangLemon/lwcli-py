@@ -313,3 +313,23 @@ async def query_list(
         limit=limit,
         offset=offset,
     )
+
+
+def _clear_inbox_sync() -> int:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with _lock:
+        conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        try:
+            _init_conn(conn)
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM inbox")
+            n = int(cur.fetchone()[0])
+            cur.execute("DELETE FROM inbox")
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+
+
+async def clear_inbox() -> int:
+    return await asyncio.to_thread(_clear_inbox_sync)
