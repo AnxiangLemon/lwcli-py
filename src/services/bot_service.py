@@ -173,7 +173,7 @@ class BotService:
                         if self._events:
                             await emit({"event": "login_saved", "wxid": wxid})
 
-                        client.login.start_heartbeat(interval=20)
+                        client.login.start_heartbeat(interval=90)
                         sec_iv = _env_int(
                             "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
                             4 * 3600,
