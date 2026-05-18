@@ -296,6 +296,141 @@
       } catch (e) {}
     })();
 
+    var _lwSelectDocBound = false;
+
+    function lwSelectCloseAll(exceptWrap) {
+      document.querySelectorAll('.lw-select.is-open').forEach(function (w) {
+        if (exceptWrap && w === exceptWrap) return;
+        w.classList.remove('is-open');
+        var t = w.querySelector('.lw-select-trigger');
+        var p = w.querySelector('.lw-select-panel');
+        if (t) t.setAttribute('aria-expanded', 'false');
+        if (p) p.hidden = true;
+      });
+    }
+
+    function refreshLwSelect(nativeSel) {
+      if (!nativeSel || !nativeSel._lwSelectWrap) return;
+      var wrap = nativeSel._lwSelectWrap;
+      var labelEl = wrap.querySelector('.lw-select-label');
+      var panel = wrap.querySelector('.lw-select-panel');
+      if (!labelEl || !panel) return;
+      var cur = nativeSel.value;
+      panel.innerHTML = '';
+      Array.prototype.forEach.call(nativeSel.options, function (opt) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lw-select-option';
+        btn.setAttribute('role', 'option');
+        btn.dataset.value = opt.value;
+        btn.textContent = opt.textContent;
+        if (opt.value === cur) {
+          btn.classList.add('is-selected');
+          btn.setAttribute('aria-selected', 'true');
+        } else {
+          btn.setAttribute('aria-selected', 'false');
+        }
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          nativeSel.value = opt.value;
+          nativeSel.dispatchEvent(new Event('change', { bubbles: true }));
+          lwSelectCloseAll();
+          refreshLwSelect(nativeSel);
+        });
+        panel.appendChild(btn);
+      });
+      var picked = nativeSel.options[nativeSel.selectedIndex];
+      labelEl.textContent = picked ? picked.textContent : '';
+    }
+
+    function initLwSelect(nativeSel) {
+      if (!nativeSel) return;
+      if (nativeSel._lwSelectWrap) {
+        refreshLwSelect(nativeSel);
+        return;
+      }
+      nativeSel.classList.add('lw-select-native');
+      var wrap = document.createElement('div');
+      wrap.className = 'lw-select';
+      if (nativeSel.classList.contains('msg-bot-select')) wrap.classList.add('msg-bot-select');
+      nativeSel.parentNode.insertBefore(wrap, nativeSel);
+      wrap.appendChild(nativeSel);
+      nativeSel._lwSelectWrap = wrap;
+
+      var trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'lw-select-trigger';
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-expanded', 'false');
+      if (nativeSel.id) trigger.setAttribute('aria-controls', nativeSel.id + '-panel');
+      trigger.innerHTML = '<span class="lw-select-label"></span><span class="lw-select-chevron" aria-hidden="true"></span>';
+      wrap.appendChild(trigger);
+
+      var panel = document.createElement('div');
+      panel.className = 'lw-select-panel';
+      panel.setAttribute('role', 'listbox');
+      panel.hidden = true;
+      if (nativeSel.id) panel.id = nativeSel.id + '-panel';
+      wrap.appendChild(panel);
+
+      wrap.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = wrap.classList.contains('is-open');
+        lwSelectCloseAll();
+        if (!open) {
+          wrap.classList.add('is-open');
+          trigger.setAttribute('aria-expanded', 'true');
+          panel.hidden = false;
+          var selected = panel.querySelector('.lw-select-option.is-selected');
+          if (selected) selected.scrollIntoView({ block: 'nearest' });
+        }
+      });
+
+      trigger.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') lwSelectCloseAll();
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          trigger.click();
+        }
+      });
+
+      nativeSel.addEventListener('change', function () {
+        refreshLwSelect(nativeSel);
+      });
+
+      if (!nativeSel._lwSelectObserver) {
+        nativeSel._lwSelectObserver = new MutationObserver(function () {
+          refreshLwSelect(nativeSel);
+        });
+        nativeSel._lwSelectObserver.observe(nativeSel, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['value'],
+        });
+      }
+
+      if (!_lwSelectDocBound) {
+        _lwSelectDocBound = true;
+        document.addEventListener('click', function () {
+          lwSelectCloseAll();
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') lwSelectCloseAll();
+        });
+      }
+
+      refreshLwSelect(nativeSel);
+    }
+
+    function initAllLwSelects() {
+      document.querySelectorAll('select.log-select').forEach(initLwSelect);
+    }
+
     async function logoutAdmin() {
       try {
         await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
@@ -1574,6 +1709,7 @@
       highlightMsgNav();
     }
 
+    initAllLwSelects();
     refreshAccounts({ soft: false });
     setInterval(function () { refreshAccounts({ soft: true }); }, 4000);
   </script>
