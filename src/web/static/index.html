@@ -243,18 +243,7 @@
         <p class="app-modal-sub" id="app-modal-confirm-msg"></p>
         <input type="hidden" id="modal-confirm-index" value="" />
         <input type="hidden" id="modal-confirm-action" value="" />
-        <div id="app-modal-confirm-phrase-wrap" class="modal-field" hidden>
-          <label for="app-modal-confirm-phrase">请输入「确认删除」以继续</label>
-          <input
-            type="text"
-            id="app-modal-confirm-phrase"
-            class="modal-input"
-            autocomplete="off"
-            spellcheck="false"
-            oninput="onConfirmPhraseInput()"
-          />
-        </div>
-        <div class="app-modal-actions app-modal-actions-end">
+<div class="app-modal-actions app-modal-actions-end">
           <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
           <button type="button" class="btn btn-danger" id="modal-confirm-delete-btn" onclick="submitModalConfirm()">删除</button>
         </div>
@@ -266,9 +255,7 @@
 
   <script>
     const accountWs = {};
-    const CONFIRM_DELETE_PHRASE = '确认删除';
-
-    const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: '日志', plugins: '插件管理' };
+const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: '日志', plugins: '插件管理' };
 
     function setMainTitle(name) {
       const el = document.getElementById('main-title');
@@ -843,11 +830,7 @@
     }
 
     function resetConfirmModal() {
-      var phrase = document.getElementById('app-modal-confirm-phrase');
-      var wrap = document.getElementById('app-modal-confirm-phrase-wrap');
       var btn = document.getElementById('modal-confirm-delete-btn');
-      if (phrase) phrase.value = '';
-      if (wrap) wrap.hidden = true;
       if (btn) {
         btn.disabled = false;
         btn.textContent = '删除';
@@ -856,15 +839,7 @@
       if (action) action.value = '';
     }
 
-    function onConfirmPhraseInput() {
-      var actionEl = document.getElementById('modal-confirm-action');
-      if (!actionEl || actionEl.value !== 'clear-messages') return;
-      var inp = document.getElementById('app-modal-confirm-phrase');
-      var btn = document.getElementById('modal-confirm-delete-btn');
-      if (btn && inp) btn.disabled = inp.value.trim() !== CONFIRM_DELETE_PHRASE;
-    }
-
-    function openConfirmModal(opts) {
+function openConfirmModal(opts) {
       resetConfirmModal();
       document.getElementById('app-modal-edit').hidden = true;
       document.getElementById('app-modal-confirm').hidden = false;
@@ -875,20 +850,10 @@
       document.getElementById('app-modal-confirm-msg').textContent = opts.message || '';
       var btn = document.getElementById('modal-confirm-delete-btn');
       if (btn) btn.textContent = opts.confirmBtn || '确认';
-      if (opts.requirePhrase) {
-        document.getElementById('app-modal-confirm-phrase-wrap').hidden = false;
-        if (btn) btn.disabled = true;
-        openAppModal();
-        setTimeout(function () {
-          var el = document.getElementById('app-modal-confirm-phrase');
-          if (el) el.focus();
-        }, 30);
-      } else {
-        openAppModal();
-        setTimeout(function () {
-          if (btn) btn.focus();
-        }, 30);
-      }
+      openAppModal();
+      setTimeout(function () {
+        if (btn) btn.focus();
+      }, 30);
     }
 
     function onAppModalKeydown(ev) {
@@ -952,11 +917,8 @@
         message:
           '将永久删除数据库中的全部 ' +
           total +
-          ' 条消息记录（config/messages.sqlite），不可恢复。请在下方输入「' +
-          CONFIRM_DELETE_PHRASE +
-          '」。',
-        requirePhrase: true,
-        confirmBtn: '确认删除',
+          ' 条消息记录（config/messages.sqlite），不可恢复。',
+        confirmBtn: '确定删除',
       });
     }
 
@@ -994,16 +956,9 @@
           showToast('日志已清空', 'success');
           await loadLogForSelected();
         } else if (action === 'clear-messages') {
-          var phrase = (document.getElementById('app-modal-confirm-phrase').value || '').trim();
-          if (phrase !== CONFIRM_DELETE_PHRASE) {
-            showToast('请输入「' + CONFIRM_DELETE_PHRASE + '」', 'warning');
-            onConfirmPhraseInput();
-            return;
-          }
           var res = await fetchJson('/api/messages', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ confirm: phrase }),
           });
           closeAppModal();
           showToast('已清空 ' + (res.deleted != null ? res.deleted : 0) + ' 条消息', 'success');
@@ -1012,10 +967,7 @@
       } catch (e) {
         alert(e.message);
       } finally {
-        if (delBtn) {
-          if (action === 'clear-messages') onConfirmPhraseInput();
-          else delBtn.disabled = false;
-        }
+        if (delBtn) delBtn.disabled = false;
       }
     }
 

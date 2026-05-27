@@ -324,16 +324,6 @@ class AdminWebApp:
         )
 
     async def api_messages_clear(self, request: web.Request) -> web.Response:
-        try:
-            body = await request.json()
-        except json.JSONDecodeError:
-            return web.json_response({"error": "无效 JSON"}, status=400)
-        confirm = str(body.get("confirm") or "").strip()
-        if confirm != "确认删除":
-            return web.json_response(
-                {"error": "请在 confirm 字段输入「确认删除」"},
-                status=400,
-            )
         deleted = await clear_inbox()
         return web.json_response({"ok": True, "deleted": deleted})
 
