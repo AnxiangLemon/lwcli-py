@@ -13,7 +13,8 @@ handle 签名与 LwApi MsgClient 回调一致：(LwApiClient, SyncMessageRespons
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 # 在 handle 中 return False（或 HANDLE_STOP_CHAIN）可中断后续插件
 HANDLE_STOP_CHAIN = False
@@ -23,6 +24,9 @@ AppReadyHandler = Callable[[], Awaitable[None]]
 BotOnlineHandler = Callable[..., Awaitable[None]]
 BotOfflineHandler = Callable[..., Awaitable[None]]
 BackgroundStarter = Callable[[], Awaitable[None]]
+SettingsTestHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
+ListModelsHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
+ClearContextHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -38,3 +42,8 @@ class PluginSpec:
     on_bot_online: Optional[BotOnlineHandler] = None
     on_bot_offline: Optional[BotOfflineHandler] = None
     start_background: Optional[BackgroundStarter] = None
+    # 相对 plugins 目录的面板路径（含 index.html），无则不可打开设置
+    settings_panel_dir: Optional[Path] = None
+    test_settings: Optional[SettingsTestHandler] = None
+    list_models: Optional[ListModelsHandler] = None
+    clear_context: Optional[ClearContextHandler] = None

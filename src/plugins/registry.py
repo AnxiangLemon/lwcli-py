@@ -22,11 +22,34 @@ _PLUGINS_DIR_ENV = "LWAPI_PLUGINS_DIR"
 _DEFAULT_PLUGINS_DIR = Path("plugins")
 
 
-def _plugins_dir() -> Path:
+def plugins_dir() -> Path:
+    """插件根目录（可被 LWAPI_PLUGINS_DIR 覆盖）。"""
     override = os.environ.get(_PLUGINS_DIR_ENV, "").strip()
     if override:
         return Path(override)
     return _DEFAULT_PLUGINS_DIR
+
+
+def _resolve_settings_panel_dir(module: object, *, source: str) -> Optional[Path]:
+    """解析 PLUGIN_SETTINGS_PANEL：相对 plugins 目录，且必须含 index.html。"""
+    raw = getattr(module, "PLUGIN_SETTINGS_PANEL", None)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    rel = Path(str(raw).strip())
+    if rel.is_absolute():
+        panel = rel
+    else:
+        panel = plugins_dir() / rel
+    try:
+        panel = panel.resolve()
+    except OSError:
+        logger.warning(f"插件面板路径无效 {source}: {rel}")
+        return None
+    index = panel / "index.html"
+    if not index.is_file():
+        logger.warning(f"插件面板缺少 index.html，已忽略设置页 {source}: {panel}")
+        return None
+    return panel
 
 
 def _spec_from_module(module: object, *, source: str) -> Optional[PluginSpec]:
@@ -45,6 +68,7 @@ def _spec_from_module(module: object, *, source: str) -> Optional[PluginSpec]:
         fn = getattr(module, name, None)
         return fn if fn is not None and callable(fn) else None
 
+    panel_dir = _resolve_settings_panel_dir(module, source=source)
     return PluginSpec(
         id=pid.strip(),
         title=str(title),
@@ -57,6 +81,10 @@ def _spec_from_module(module: object, *, source: str) -> Optional[PluginSpec]:
         on_bot_online=_optional_hook("on_bot_online"),
         on_bot_offline=_optional_hook("on_bot_offline"),
         start_background=_optional_hook("start_background"),
+        settings_panel_dir=panel_dir,
+        test_settings=_optional_hook("test_settings"),
+        list_models=_optional_hook("list_models"),
+        clear_context=_optional_hook("clear_context"),
     )
 
 
@@ -65,7 +93,7 @@ def _module_name_for_file(path: Path) -> str:
 
 
 def _load_plugins_from_dir() -> List[PluginSpec]:
-    root = _plugins_dir()
+    root = plugins_dir()
     if not root.is_dir():
         return []
 
@@ -116,11 +144,12 @@ def _print_discovered_plugins(specs: List[PluginSpec], *, root: Path) -> None:
         f"发现 {len(specs)} 个:"
     )
     for p in specs:
-        print(f"  - {p.id}  {p.title}")
+        panel = " [设置页]" if p.settings_panel_dir else ""
+        print(f"  - {p.id}  {p.title}{panel}")
 
 
 def _build_registry() -> tuple[PluginSpec, ...]:
-    root = _plugins_dir()
+    root = plugins_dir()
     specs = _load_plugins_from_dir()
     _print_discovered_plugins(specs, root=root)
     return tuple(specs)

@@ -20,6 +20,17 @@ from src.account_loader import account_slot_key, load_accounts_safe, save_accoun
 from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import clear_inbox, query_list, query_summary
 from src.plugins.lifecycle import plugin_background_lifespan
+from src.plugins.config import (
+    is_secret_placeholder,
+    load_plugin_settings,
+    mask_settings_for_api,
+    save_plugin_settings,
+)
+from src.plugins.panel import (
+    panel_url_for,
+    serve_plugin_panel,
+    serve_plugin_panel_index,
+)
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.runtime.account_events import AccountEventHub
@@ -69,6 +80,23 @@ class AdminWebApp:
                 web.post("/api/start-all", self.api_start_all),
                 web.get("/api/plugins", self.api_plugins_get),
                 web.put("/api/plugins", self.api_plugins_put),
+                web.get("/api/plugins/{plugin_id}/settings", self.api_plugin_settings_get),
+                web.put("/api/plugins/{plugin_id}/settings", self.api_plugin_settings_put),
+                web.post(
+                    "/api/plugins/{plugin_id}/settings/test",
+                    self.api_plugin_settings_test,
+                ),
+                web.post(
+                    "/api/plugins/{plugin_id}/settings/models",
+                    self.api_plugin_settings_models,
+                ),
+                web.post(
+                    "/api/plugins/{plugin_id}/settings/clear-context",
+                    self.api_plugin_settings_clear_context,
+                ),
+                web.get("/plugin-ui/{plugin_id}", serve_plugin_panel_index),
+                web.get("/plugin-ui/{plugin_id}/", serve_plugin_panel_index),
+                web.get("/plugin-ui/{plugin_id}/{path:.+}", serve_plugin_panel),
                 web.get("/api/messages/summary", self.api_messages_summary),
                 web.get("/api/messages", self.api_messages_list),
                 web.post("/api/messages/send", self.api_messages_send),
@@ -251,12 +279,130 @@ class AdminWebApp:
                         "version": p.version,
                         "author": p.author,
                         "icon": p.icon,
+                        "capabilities": {
+                            "settings": p.settings_panel_dir is not None,
+                            "panel_url": panel_url_for(p.id),
+                        },
                     }
                     for p in specs
                 ],
                 "enabled": load_enabled_ids(),
             }
         )
+
+    def _plugin_id_from_request(self, request: web.Request) -> str | None:
+        pid = (request.match_info.get("plugin_id") or "").strip()
+        if not pid or pid not in REGISTRY:
+            return None
+        return pid
+
+    async def _read_plugin_settings_body(self, request: web.Request) -> dict | web.Response:
+        raw_body = await request.read()
+        if not raw_body.strip():
+            return {}
+        try:
+            parsed = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        if not isinstance(parsed, dict):
+            return web.json_response({"error": "请求体须为 JSON 对象"}, status=400)
+        return parsed
+
+    def _merge_plugin_trial_settings(self, stored: dict, body: dict) -> dict:
+        trial = {**stored, **body}
+        for name in ("api_key", "secret_key", "access_token"):
+            if is_secret_placeholder(body.get(name)):
+                trial[name] = stored.get(name, "")
+        return trial
+
+    async def api_plugin_settings_get(self, request: web.Request) -> web.Response:
+        pid = self._plugin_id_from_request(request)
+        if pid is None:
+            return web.json_response({"error": "未知插件"}, status=404)
+        stored = load_plugin_settings(pid)
+        return web.json_response(
+            {
+                "plugin_id": pid,
+                "settings": mask_settings_for_api(stored),
+                "panel_url": panel_url_for(pid),
+            }
+        )
+
+    async def api_plugin_settings_put(self, request: web.Request) -> web.Response:
+        pid = self._plugin_id_from_request(request)
+        if pid is None:
+            return web.json_response({"error": "未知插件"}, status=404)
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "无效 JSON"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "请求体须为 JSON 对象"}, status=400)
+        patch = {k: v for k, v in body.items() if not str(k).startswith("_")}
+        merged = save_plugin_settings(pid, patch)
+        return web.json_response(
+            {"ok": True, "settings": mask_settings_for_api(merged)}
+        )
+
+    async def api_plugin_settings_test(self, request: web.Request) -> web.Response:
+        pid = self._plugin_id_from_request(request)
+        if pid is None:
+            return web.json_response({"error": "未知插件"}, status=404)
+        spec = REGISTRY.get(pid)
+        if spec is None or spec.test_settings is None:
+            return web.json_response({"error": "该插件不支持连接测试"}, status=404)
+        stored = load_plugin_settings(pid)
+        body = await self._read_plugin_settings_body(request)
+        if isinstance(body, web.Response):
+            return body
+        trial = self._merge_plugin_trial_settings(stored, body)
+        try:
+            result = await spec.test_settings(trial)
+            if not isinstance(result, dict):
+                result = {"ok": True, "message": "连接成功"}
+            return web.json_response(result)
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=400)
+
+    async def api_plugin_settings_models(self, request: web.Request) -> web.Response:
+        pid = self._plugin_id_from_request(request)
+        if pid is None:
+            return web.json_response({"error": "未知插件"}, status=404)
+        spec = REGISTRY.get(pid)
+        if spec is None or spec.list_models is None:
+            return web.json_response({"error": "该插件不支持拉取模型列表"}, status=404)
+        stored = load_plugin_settings(pid)
+        body = await self._read_plugin_settings_body(request)
+        if isinstance(body, web.Response):
+            return body
+        trial = self._merge_plugin_trial_settings(stored, body)
+        try:
+            result = await spec.list_models(trial)
+            if not isinstance(result, dict):
+                result = {"ok": False, "error": "无效响应"}
+            return web.json_response(result)
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=400)
+
+    async def api_plugin_settings_clear_context(self, request: web.Request) -> web.Response:
+        pid = self._plugin_id_from_request(request)
+        if pid is None:
+            return web.json_response({"error": "未知插件"}, status=404)
+        spec = REGISTRY.get(pid)
+        if spec is None or spec.clear_context is None:
+            return web.json_response({"error": "该插件不支持清空上下文"}, status=404)
+        stored = load_plugin_settings(pid)
+        body = await self._read_plugin_settings_body(request)
+        if isinstance(body, web.Response):
+            return body
+        trial = self._merge_plugin_trial_settings(stored, body)
+        try:
+            result = await spec.clear_context(trial)
+            if not isinstance(result, dict):
+                result = {"ok": True, "message": "已清空"}
+            return web.json_response(result)
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=400)
 
     async def api_plugins_put(self, request: web.Request) -> web.Response:
         try:

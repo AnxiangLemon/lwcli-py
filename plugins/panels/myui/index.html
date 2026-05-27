@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MyUI 插件设置</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <p class="hint">保存后立即生效，无需重启。私聊机器人发送 <code>myui</code> 可测试问候语。</p>
+    <label class="field">
+      <span class="label">问候语</span>
+      <input type="text" id="greeting" class="input" placeholder="你好，这是 MyUI 插件！" autocomplete="off" />
+    </label>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btn-save">保存</button>
+      <button type="button" class="btn" id="btn-reload">重新加载</button>
+    </div>
+    <p id="status" class="status" role="status"></p>
+  </main>
+  <script src="/static/plugin-host.js"></script>
+  <script>
+    (function () {
+      var api = LwPluginHost.createClient();
+      var greetingEl = document.getElementById('greeting');
+      var statusEl = document.getElementById('status');
+
+      function setStatus(msg, isErr) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (isErr ? ' err' : ' ok');
+      }
+
+      async function load() {
+        setStatus('加载中…');
+        try {
+          var s = await api.getSettings();
+          greetingEl.value = s.greeting || '';
+          setStatus('已加载');
+        } catch (e) {
+          setStatus(e.message || '加载失败', true);
+        }
+      }
+
+      async function save() {
+        setStatus('保存中…');
+        try {
+          await api.putSettings({ greeting: greetingEl.value.trim() });
+          setStatus('已保存，立即生效');
+        } catch (e) {
+          setStatus(e.message || '保存失败', true);
+        }
+      }
+
+      document.getElementById('btn-save').addEventListener('click', save);
+      document.getElementById('btn-reload').addEventListener('click', load);
+      load();
+    })();
+  </script>
+</body>
+</html>

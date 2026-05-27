@@ -20,6 +20,15 @@ _mtime: float | None = None
 _cached_enabled: List[str] | None = None
 
 
+def _read_config_dict() -> dict:
+    _ensure_file()
+    try:
+        raw = json.loads(PLUGIN_CONFIG.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 def _ensure_file() -> None:
     """首次使用时若不存在则写入默认启用列表。"""
     if PLUGIN_CONFIG.exists():
@@ -34,6 +43,12 @@ def invalidate_plugin_settings_cache() -> None:
     global _mtime, _cached_enabled
     _mtime = None
     _cached_enabled = None
+    try:
+        from src.plugins.config import invalidate_plugin_config_cache
+
+        invalidate_plugin_config_cache()
+    except ImportError:
+        pass
 
 
 def load_enabled_ids() -> List[str]:
@@ -61,6 +76,8 @@ def load_enabled_ids() -> List[str]:
 
 
 def save_enabled_ids(ids: List[str]) -> None:
-    """覆盖写入启用列表并清空缓存。"""
-    atomic_write_json(PLUGIN_CONFIG, {"enabled": ids})
+    """覆盖写入启用列表并清空缓存（保留 settings 段）。"""
+    raw = _read_config_dict()
+    raw["enabled"] = ids
+    atomic_write_json(PLUGIN_CONFIG, raw)
     invalidate_plugin_settings_cache()

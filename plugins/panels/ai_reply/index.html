@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 智能回复 · 设置</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="panel-scroll">
+    <main class="wrap">
+      <div class="layout-columns">
+        <section class="card">
+          <h2 class="section-title">连接</h2>
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">服务商</span>
+              <select id="provider" class="input">
+                <option value="deepseek">DeepSeek</option>
+                <option value="custom">自定义（OpenAI 兼容）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">模型</span>
+              <div class="input-row">
+                <select id="model_select" class="input input-flex">
+                  <option value="" disabled selected>请先获取模型</option>
+                </select>
+                <button type="button" class="btn" id="btn-models" title="GET /models">获取模型</button>
+              </div>
+              <span class="hint">先点「获取模型」，在下拉中选择后点「保存」才会缓存</span>
+            </label>
+          </div>
+          <div class="field span-full">
+            <span class="label">API Key</span>
+            <div class="input-row">
+              <input
+                type="password"
+                id="api_key"
+                class="input input-flex"
+                placeholder="填写 Key 后，下方地址会自动填充"
+                autocomplete="off"
+              />
+              <button type="button" class="btn btn-accent" id="btn-test">测试连接</button>
+            </div>
+            <span class="hint" id="api_key_hint"></span>
+            <p id="test_status" class="inline-status" role="status" aria-live="polite"></p>
+          </div>
+          <div class="grid-2 span-full">
+            <label class="field">
+              <span class="label">API 地址（Base URL）</span>
+              <input type="text" id="base_url" class="input" placeholder="https://api.deepseek.com" />
+            </label>
+            <label class="field">
+              <span class="label">对话接口路径</span>
+              <input type="text" id="chat_path" class="input" placeholder="/v1/chat/completions" />
+            </label>
+          </div>
+          <p class="hint span-full endpoint-preview">
+            实际请求：<code id="endpoint_preview">https://api.deepseek.com/v1/chat/completions</code>
+          </p>
+        </section>
+
+        <section class="card">
+          <h2 class="section-title">触发</h2>
+          <div class="checkbox-grid">
+            <label class="chip-check">
+              <input type="checkbox" id="enabled" checked />
+              <span>启用 AI 回复</span>
+            </label>
+            <label class="chip-check">
+              <input type="checkbox" id="reply_private" checked />
+              <span>私聊自动回复</span>
+            </label>
+            <label class="chip-check">
+              <input type="checkbox" id="reply_group" checked />
+              <span>群聊回复</span>
+            </label>
+            <label class="chip-check">
+              <input type="checkbox" id="reply_on_error" />
+              <span>失败时发提示</span>
+            </label>
+          </div>
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">群聊触发方式</span>
+              <select id="group_trigger" class="input">
+                <option value="at_only">仅 @ 机器人</option>
+                <option value="prefix">消息以 # 开头</option>
+                <option value="always">群内所有文本（慎用）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">群聊前缀</span>
+              <input type="text" id="group_prefix" class="input" placeholder="#" maxlength="8" />
+            </label>
+          </div>
+          <label class="field span-full">
+            <span class="label">私聊白名单 wxid</span>
+            <input
+              type="text"
+              id="private_allow_wxids"
+              class="input"
+              placeholder="wxid_a|wxid_b|filehelper（留空=允许全部私聊）"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="hint">仅回复列表中的联系人；多个用竖线 | 分隔</span>
+          </label>
+          <label class="field span-full">
+            <span class="label">群聊白名单 wxid</span>
+            <input
+              type="text"
+              id="group_allow_wxids"
+              class="input"
+              placeholder="12345678@chatroom|87654321@chatroom（留空=允许全部群）"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="hint">仅回复列表中的群（群 id 通常以 @chatroom 结尾）；多个用竖线 | 分隔</span>
+          </label>
+          <label class="field span-full">
+            <span class="label">失败提示语</span>
+            <input type="text" id="error_message" class="input" placeholder="AI 暂时不可用，请稍后再试。" />
+          </label>
+        </section>
+      </div>
+
+      <section class="card card-dialog">
+        <h2 class="section-title">对话</h2>
+        <p class="hint dialog-hint">私聊/群聊可分别设置提示词；未填写的场景会使用「通用提示词」</p>
+        <div class="dialog-layout">
+          <div class="prompt-stack">
+            <label class="field field-prompt-sm">
+              <span class="label">通用提示词（备用）</span>
+              <textarea
+                id="system_prompt"
+                class="input textarea textarea-sm"
+                rows="4"
+                placeholder="私聊/群聊未单独配置时使用"
+              ></textarea>
+            </label>
+            <label class="field field-prompt-sm">
+              <span class="label">私聊提示词</span>
+              <textarea
+                id="system_prompt_private"
+                class="input textarea textarea-sm"
+                rows="5"
+                placeholder="仅私聊生效；留空则用通用"
+              ></textarea>
+            </label>
+            <label class="field field-prompt-sm">
+              <span class="label">群聊提示词</span>
+              <textarea
+                id="system_prompt_group"
+                class="input textarea textarea-sm"
+                rows="5"
+                placeholder="仅群聊生效；留空则用通用"
+              ></textarea>
+            </label>
+          </div>
+          <div class="dialog-params">
+            <label class="field field-param">
+              <span class="label">温度</span>
+              <span class="field-tip">越高越发散；常用 0.7</span>
+              <input type="number" id="temperature" class="input" min="0" max="2" step="0.1" />
+            </label>
+            <label class="field field-param">
+              <span class="label">最大 Token</span>
+              <span class="field-tip field-tip--spacer" aria-hidden="true">占位</span>
+              <input type="number" id="max_tokens" class="input" min="64" max="8192" step="64" />
+            </label>
+            <label class="field field-param">
+              <span class="label">超时（秒）</span>
+              <span class="field-tip field-tip--spacer" aria-hidden="true">占位</span>
+              <input type="number" id="timeout_sec" class="input" min="10" max="300" step="5" />
+            </label>
+            <label class="field field-param">
+              <span class="label">上下文轮数</span>
+              <span class="field-tip">每人几轮；0 不记历史</span>
+              <input type="number" id="max_context_turns" class="input" min="0" max="20" step="1" />
+            </label>
+            <div class="context-actions">
+              <label class="chip-check chip-check--solo">
+                <input type="checkbox" id="use_context" checked />
+                <span>记住多轮对话（按联系人）</span>
+              </label>
+              <button type="button" class="btn" id="btn-clear-context" title="清空本服务进程内的全部对话记忆">
+                清空对话上下文
+              </button>
+            </div>
+            <p id="context_status" class="inline-status context-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="panel-footer">
+    <p id="status" class="status" role="status"></p>
+    <div class="actions footer">
+      <button type="button" class="btn primary" id="btn-save">保存</button>
+      <button type="button" class="btn" id="btn-reload">重新加载</button>
+    </div>
+  </footer>
+
+  <script src="/static/plugin-host.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

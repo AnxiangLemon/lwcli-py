@@ -251,6 +251,28 @@
     </div>
   </div>
 
+  <div id="plugin-settings-modal" class="app-modal plugin-settings-modal" aria-hidden="true">
+    <div class="app-modal-backdrop" onclick="closePluginSettingsModal()" aria-hidden="true"></div>
+    <div
+      class="app-modal-panel plugin-settings-modal-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="plugin-settings-modal-title"
+      onclick="event.stopPropagation()"
+    >
+      <div class="plugin-settings-modal-head">
+        <h2 id="plugin-settings-modal-title" class="app-modal-title">插件设置</h2>
+        <button type="button" class="plugin-settings-modal-close" onclick="closePluginSettingsModal()" aria-label="关闭">×</button>
+      </div>
+      <iframe
+        id="plugin-settings-iframe"
+        class="plugin-settings-iframe"
+        title="插件设置"
+        src="about:blank"
+      ></iframe>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" aria-hidden="true"></div>
 
   <script>
@@ -1256,6 +1278,7 @@ function openConfirmModal(opts) {
         '<span class="plugin-toggle-ui"></span>' +
         '<span class="plugin-toggle-label">' + (on ? '已启用' : '未启用') + '</span>' +
         '</label></div>' +
+        '<button type="button" class="btn btn-ghost plugin-settings-open" data-plugin-id="' + pid + '" data-plugin-title="' + esc(p.title) + '" disabled title="该插件未提供设置页">设置</button>' +
         reorderBtns +
         '</div></div></div></article>'
       );
@@ -1313,6 +1336,68 @@ function openConfirmModal(opts) {
       }
     }
 
+    function applyPluginSettingsButtons() {
+      var host = document.getElementById('plugins-list');
+      if (!host) return;
+      var byId = {};
+      (_pluginCatalog || []).forEach(function (p) {
+        byId[p.id] = p;
+      });
+      host.querySelectorAll('.plugin-settings-open').forEach(function (btn) {
+        var id = btn.getAttribute('data-plugin-id');
+        var p = byId[id];
+        var cap = p && p.capabilities;
+        var hasPanel = cap && cap.settings && cap.panel_url;
+        btn.disabled = !hasPanel;
+        btn.title = hasPanel ? '打开插件设置' : '该插件未提供设置页';
+      });
+    }
+
+    function openPluginSettingsModal(pluginId, title) {
+      var p = (_pluginCatalog || []).find(function (x) {
+        return x.id === pluginId;
+      });
+      var url = p && p.capabilities && p.capabilities.panel_url;
+      if (!url) {
+        showToast('该插件未提供设置页', true);
+        return;
+      }
+      var root = document.getElementById('plugin-settings-modal');
+      var iframe = document.getElementById('plugin-settings-iframe');
+      var heading = document.getElementById('plugin-settings-modal-title');
+      if (!root || !iframe) return;
+      if (heading) heading.textContent = (title || pluginId) + ' · 设置';
+      iframe.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+      root.classList.add('is-open');
+      root.setAttribute('aria-hidden', 'false');
+      document.addEventListener('keydown', onPluginSettingsModalKeydown);
+    }
+
+    function closePluginSettingsModal() {
+      var root = document.getElementById('plugin-settings-modal');
+      var iframe = document.getElementById('plugin-settings-iframe');
+      if (!root) return;
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+      if (iframe) iframe.src = 'about:blank';
+      document.removeEventListener('keydown', onPluginSettingsModalKeydown);
+    }
+
+    function onPluginSettingsModalKeydown(ev) {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closePluginSettingsModal();
+      }
+    }
+
+    document.addEventListener('click', function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest('.plugin-settings-open') : null;
+      if (!btn || btn.disabled) return;
+      var id = btn.getAttribute('data-plugin-id');
+      var title = btn.getAttribute('data-plugin-title') || id;
+      openPluginSettingsModal(id, title);
+    });
+
     async function loadPluginsPanel() {
       var host = document.getElementById('plugins-list');
       if (!host) return;
@@ -1336,6 +1421,7 @@ function openConfirmModal(opts) {
           })
           .join('');
         refreshPluginOrderUi();
+        applyPluginSettingsButtons();
       } catch (e) {
         host.textContent = e.message || String(e);
       }

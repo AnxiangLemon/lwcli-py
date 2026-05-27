@@ -1918,6 +1918,82 @@ html.theme-light .plugin-card-ver {
   color: rgba(240, 245, 255, 0.88);
 }
 
+.plugin-settings-open {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.plugin-settings-open:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.plugin-settings-modal.is-open {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.plugin-settings-modal .app-modal-backdrop {
+  background: rgba(2, 2, 6, 0.72);
+}
+
+@keyframes plugin-settings-fullscreen-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.plugin-settings-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 28px 14px;
+  flex-shrink: 0;
+}
+
+.plugin-settings-modal-head .app-modal-title {
+  margin: 0;
+  flex: 1;
+  font-size: 1.35rem;
+}
+
+.plugin-settings-modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.plugin-settings-modal-close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.plugin-settings-iframe {
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: #0c0c12;
+}
+
+html.theme-light .plugin-settings-iframe {
+  background: #f4f6fc;
+}
+
 .plugin-card-actions {
   display: flex;
   align-items: center;
@@ -2076,6 +2152,30 @@ html.theme-light .app-modal-panel {
   background:
     linear-gradient(155deg, rgba(123, 140, 248, 0.08) 0%, transparent 50%),
     #ffffff;
+}
+
+/* 插件设置全屏（须写在 .app-modal-panel 之后，覆盖 max-width: 460px） */
+.plugin-settings-modal .app-modal-panel.plugin-settings-modal-panel {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  animation: plugin-settings-fullscreen-in 0.22s ease;
+  transform: none;
+}
+
+.plugin-settings-modal .app-modal-panel.plugin-settings-modal-panel::before {
+  height: 2px;
+}
+
+html.theme-light .plugin-settings-modal .app-modal-panel.plugin-settings-modal-panel {
+  background: var(--surface-solid);
 }
 
 @keyframes app-modal-in {
