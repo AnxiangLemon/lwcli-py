@@ -4,10 +4,12 @@
 职责概要：
 - 使用 account_slot_key 作为任务字典键（备注+device_id），避免 device_id 重复时冲突；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
-- 登录成功后启动心跳、LoginClient 内在线维持任务（默认每 4h SecAutoAuth、每 24h Reportclientcheck）、
-  以及登录后立即一次环境上报；消息处理委托给 message_handler.default_message_handler。
+- 登录成功后启动 LoginClient 内在线维持任务（默认每 8h SecAutoAuth、每 1h Reportclientcheck，
+  并在每天本地凌晨 03:10 强制再发一次 Reportclientcheck）、以及登录后立即一次环境上报；
+  心跳由服务端维护，客户端不再单独发送 HeartBeat。
+- 消息处理委托给 message_handler.default_message_handler。
 - 任务取消或 `LwApiClient` 退出时：`aclose` 会依次停止消息轮询并 `join_background_tasks`，
-  使心跳与在线维持协程完全结束后再关闭连接。
+  使在线维持协程完全结束后再关闭连接。
 
 注意：若构造本类时不传入 account_events，则二维码登录无法推送界面（emit 为空会失败），
 正常 Web 入口应始终注入 EventHub。
@@ -173,16 +175,17 @@ class BotService:
                         if self._events:
                             await emit({"event": "login_saved", "wxid": wxid})
 
-                        client.login.start_heartbeat(interval=90)
+                        # 服务端维护心跳和在线状态，客户端只需保持连接并周期性上报环境
+                        # （SecAutoAuth 默认 8h，Reportclientcheck 默认 1h，每日 03:10 必发）。
                         sec_iv = _env_int(
                             "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
-                            4 * 3600,
-                            300,
+                            8 * 3600,
+                            3600,
                         )
                         report_iv = _env_int(
                             "LWAPI_REPORT_CLIENT_CHECK_INTERVAL_SECONDS",
-                            24 * 3600,
                             3600,
+                            600,
                         )
                         client.login.start_keepalive(
                             sec_interval=sec_iv,

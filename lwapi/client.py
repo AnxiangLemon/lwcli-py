@@ -19,7 +19,8 @@ class LwApiClient:
     """
     LwApi 异步 SDK。
 
-    - ``login``：扫码登录、心跳、长连接等（LoginClient）。
+    - ``login``：扫码登录、环境维持（SecAutoAuth / Reportclientcheck）等（LoginClient）。
+      心跳由服务端维护，SDK 不再单独发送 HeartBeat。
     - ``msg``：消息长轮询与各类发送接口（参数由 SDK 组装 JSON）。
     - ``favor`` / ``friend`` / ``group`` 等：其它业务域的同类封装。
     """
@@ -68,11 +69,9 @@ class LwApiClient:
         if hasattr(self.msg, "wait_stop"):
             await self.msg.wait_stop()
 
-        # 停止心跳、缓存刷新等后台任务并等待结束，避免关闭连接池后仍有请求。
+        # 停止环境维持后台任务并等待结束，避免关闭连接池后仍有请求。
         if hasattr(self.login, "join_background_tasks"):
             await self.login.join_background_tasks()
-        elif hasattr(self.login, "stop_heartbeat"):
-            self.login.stop_heartbeat()
 
         # 统一通过 transport 的关闭方法释放底层连接池。
         await self.transport.aclose()

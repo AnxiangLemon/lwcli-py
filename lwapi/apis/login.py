@@ -1,21 +1,26 @@
 # lwapi/apis/login.py
 import asyncio
 import time
+from datetime import datetime, timedelta
 from enum import IntEnum
 from typing import Optional, Dict, Any, Tuple, AsyncIterator, Callable, Awaitable
 
-import httpx
 from httpx import ConnectError, NetworkError, TimeoutException
 from loguru import logger
 
 from ..transport import AsyncHTTPTransport
-from ..exceptions import ApiError, HttpError, LoginError, is_wrapped_request_timeout
+from ..exceptions import ApiError, HttpError, LoginError
 from ..models.login import (
     QRGetRequest,
     QRGetResponse,
     QRCheckResponse,
     ProxyInfo,
 )
+
+
+# 每天必须发送 Reportclientcheck 的本地时刻（凌晨 3:10）
+_DAILY_REPORT_HOUR = 3
+_DAILY_REPORT_MINUTE = 10
 
 
 class QRStatus(IntEnum):
@@ -194,11 +199,8 @@ class LoginClient:
     def __init__(self, transport: AsyncHTTPTransport):
         self.t = transport
 
-        # 心跳任务控制（支持无限次启停）
-        self._heartbeat_task: Optional[asyncio.Task] = None
-        self._stop_heartbeat = asyncio.Event()
-
-        # 缓存刷新：定时 SecAutoAuth、Reportclientcheck（与心跳同级的启停模型）
+        # 服务端已维持心跳，客户端不再单独发送 /Login/HeartBeat。
+        # 这里只保留环境维持任务：周期性 SecAutoAuth、Reportclientcheck（含每日 03:10 强制上报）。
         self._maint_task: Optional[asyncio.Task] = None
         self._stop_maint = asyncio.Event()
 
@@ -381,103 +383,64 @@ class LoginClient:
                     "failures": ev.get("failures"),
                 }
 
-    # ==================== 永久心跳（支持重复登录） ====================
-    async def _heartbeat_worker(self, interval: int = 60) -> None:
-        self._stop_heartbeat.clear()
-
-        try:
-            while not self._stop_heartbeat.is_set():
-                try:
-                    await self.t.post("/Login/HeartBeat", timeout=45.0)
-
-                except httpx.ReadTimeout:
-                    continue
-                except HttpError as e:
-                    if is_wrapped_request_timeout(e):
-                        logger.debug("心跳请求超时，稍后重试")
-                        await asyncio.sleep(2)
-                        continue
-                    logger.warning(f"心跳 HTTP 异常（将继续）: {e}")
-                    await asyncio.sleep(5)
-                    continue
-                except LoginError as e:
-                    logger.warning(f"心跳业务异常（将继续）: {e}")
-                except (ConnectError, NetworkError, TimeoutException):
-                    logger.warning("网络波动，5秒后重试")
-                    await asyncio.sleep(5)
-                    continue
-                except asyncio.CancelledError:
-                    logger.info("心跳任务被取消")
-                    raise
-                except ApiError as e:
-                    # 到 lwapi 的 HTTP 已成功；微信侧超时/离线等由后端包装为 ApiError（常见 -2001），
-                    # 与 httpx 直连异常不同，故单独按可恢复网络问题处理。
-                    if e.code == -2001 or (
-                        e.message
-                        and (
-                            "网络请求失败" in e.message
-                            or "deadline exceeded" in e.message.lower()
-                        )
-                    ):
-                        logger.warning(f"心跳：上游网络波动（将继续）: {e}")
-                    else:
-                        logger.warning(f"心跳 API 异常（将继续）: {e}")
-                    await asyncio.sleep(5)
-                    continue
-                except Exception as e:
-                    logger.exception(f"心跳未知异常: {e}")
-
-                # 可取消的等待
-                try:
-                    await asyncio.wait_for(
-                        self._stop_heartbeat.wait(), timeout=interval
-                    )
-                except asyncio.TimeoutError:
-                    continue
-
-        except asyncio.CancelledError:
-            logger.info("心跳任务正常取消")
-            raise
-        finally:
-            logger.info("心跳任务已彻底结束")
-
-    def start_heartbeat(self, interval: int = 55) -> None:
-        """登录成功后调用（可重复调用，自动清理旧任务）"""
-        self.stop_heartbeat()  # 先确保干净
-
-        self._heartbeat_task = asyncio.create_task(
-            self._heartbeat_worker(interval), name="LoginClient-Heartbeat"
+    # ==================== 环境维持（SecAutoAuth / Reportclientcheck） ====================
+    @staticmethod
+    def _next_daily_report_ts(now_wall: Optional[float] = None) -> float:
+        """返回下一次本地凌晨 03:10 的 time.time() 时间戳（严格大于 now_wall）。"""
+        if now_wall is None:
+            now_wall = time.time()
+        now_dt = datetime.fromtimestamp(now_wall)
+        target = now_dt.replace(
+            hour=_DAILY_REPORT_HOUR,
+            minute=_DAILY_REPORT_MINUTE,
+            second=0,
+            microsecond=0,
         )
-        logger.success("心跳已启动")
-
-    def stop_heartbeat(self) -> None:
-        """立即停止心跳（安全、可重复调用）"""
-        if self._stop_heartbeat.is_set():
-            return
-
-        self._stop_heartbeat.set()
-        if self._heartbeat_task and not self._heartbeat_task.done():
-            self._heartbeat_task.cancel()
-            logger.info("正在停止心跳任务...")
+        if target <= now_dt:
+            target += timedelta(days=1)
+        return target.timestamp()
 
     async def _maint_worker(self, sec_interval: int, report_interval: int) -> None:
-        """按固定周期二次登录、环境上报；与 `_heartbeat_worker` 一样可被 cancel/stop。"""
+        """
+        周期任务：
+        - 每隔 sec_interval 调用 SecAutoAuth（默认 8 小时）；
+        - 每隔 report_interval 调用 Reportclientcheck（默认 1 小时）；
+        - 每天本地时间 03:10 必发一次 Reportclientcheck，避免错过日切窗口。
+        """
         self._stop_maint.clear()
-        next_sec = time.monotonic() + sec_interval
-        next_report = time.monotonic() + report_interval
+        now_mono = time.monotonic()
+        next_sec_mono = now_mono + sec_interval
+        next_report_mono = now_mono + report_interval
+        # 凌晨 03:10 用墙钟时间表达，避免 monotonic 偏差累积。
+        next_daily_wall = self._next_daily_report_ts()
         try:
             while not self._stop_maint.is_set():
-                now = time.monotonic()
-                if now >= next_sec:
+                now_mono = time.monotonic()
+                now_wall = time.time()
+
+                if now_mono >= next_sec_mono:
                     await self.sec_auto_login()
-                    next_sec = time.monotonic() + sec_interval
+                    next_sec_mono = time.monotonic() + sec_interval
                     continue
-                if now >= next_report:
+
+                # 普通小时级上报与每日 03:10 上报共用同一接口，
+                # 任一到点即触发；触发后两个计划都顺延，避免相近时间内重复发送。
+                hourly_due = now_mono >= next_report_mono
+                daily_due = now_wall >= next_daily_wall
+                if hourly_due or daily_due:
+                    if daily_due:
+                        logger.info("到达每日 03:10，触发 Reportclientcheck")
                     await self.report_client_check()
-                    next_report = time.monotonic() + report_interval
+                    next_report_mono = time.monotonic() + report_interval
+                    if daily_due:
+                        next_daily_wall = self._next_daily_report_ts(time.time())
                     continue
-                deadline = min(next_sec, next_report)
-                wait = deadline - now
+
+                # 等待到最近的截止时刻；用 monotonic 计算距离 03:10 的秒数避免时区/夏令时陷阱。
+                hourly_wait = next_report_mono - now_mono
+                sec_wait = next_sec_mono - now_mono
+                daily_wait = next_daily_wall - now_wall
+                wait = max(0.0, min(hourly_wait, sec_wait, daily_wait))
                 if wait <= 0:
                     continue
                 try:
@@ -496,19 +459,20 @@ class LoginClient:
     def start_keepalive(
         self,
         *,
-        sec_interval: int = 4 * 3600,
-        report_interval: int = 24 * 3600,
+        sec_interval: int = 8 * 3600,
+        report_interval: int = 3600,
     ) -> None:
-        """登录成功后启动：每隔 sec_interval 调用 SecAutoAuth，每隔 report_interval 调用 Reportclientcheck。"""
+        """登录成功后启动：周期性 SecAutoAuth / Reportclientcheck（含每日 03:10 强制上报）。"""
         self.stop_keepalive()
         sec_interval = max(3600, sec_interval)
-        report_interval = max(3600, report_interval)
+        report_interval = max(600, report_interval)
         self._maint_task = asyncio.create_task(
             self._maint_worker(sec_interval, report_interval),
             name="LoginClient-KeepAlive",
         )
         logger.success(
-            f"环境刷新（SecAutoAuth 每 {sec_interval}s，Reportclientcheck 每 {report_interval}s）"
+            f"环境刷新（SecAutoAuth 每 {sec_interval}s，Reportclientcheck 每 {report_interval}s，"
+            f"每日 {_DAILY_REPORT_HOUR:02d}:{_DAILY_REPORT_MINUTE:02d} 强制上报一次）"
         )
 
     def stop_keepalive(self) -> None:
@@ -522,20 +486,18 @@ class LoginClient:
 
     async def join_background_tasks(self) -> None:
         """
-        停止并等待心跳、缓存刷新任务完全结束（关闭 transport 或账号退出前应调用）。
+        停止并等待缓存刷新任务完全结束（关闭 transport 或账号退出前应调用）。
         """
-        self.stop_heartbeat()
         self.stop_keepalive()
-        for t in (self._heartbeat_task, self._maint_task):
-            if t and not t.done():
-                try:
-                    await t
-                except asyncio.CancelledError:
-                    pass
+        if self._maint_task and not self._maint_task.done():
+            try:
+                await self._maint_task
+            except asyncio.CancelledError:
+                pass
 
     # ==================== 其他登录相关接口 ====================
     async def logout(self) -> bool:
-        """退出登录并停止心跳、缓存刷新等后台任务。"""
+        """退出登录并停止缓存刷新等后台任务。"""
         await self.join_background_tasks()
         await self.t.post("/Login/LogOut")
         return True
