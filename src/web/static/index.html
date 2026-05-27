@@ -73,22 +73,11 @@
       <div class="main-body">
 
     <section id="view-accounts" class="view-panel is-active" aria-labelledby="main-title">
-      <div class="toolbar">
-        <button type="button" class="btn" id="btn-refresh" onclick="refreshAccounts({ soft: true })">刷新列表</button>
-        <button type="button" class="btn btn-primary" id="btn-start-all" onclick="startAll()">启动全部机器人</button>
-      </div>
-
       <div class="card">
-        <h2>新增账号</h2>
-        <form onsubmit="addAccount(event)" class="form-row">
-          <input type="text" id="new-device" placeholder="device_id（32位小写hex）" required maxlength="32" spellcheck="false" autocomplete="off" />
-          <input type="text" id="new-remark" placeholder="机器人备注" required/>
-          <button type="submit" class="btn btn-primary">添加</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>账号列表</h2>
+        <div class="card-head">
+          <h2>账号列表</h2>
+          <button type="button" class="btn btn-primary" onclick="openAddAccountModal()">新增账号</button>
+        </div>
         <div id="accounts"></div>
       </div>
     </section>
@@ -221,7 +210,7 @@
     >
       <div id="app-modal-edit" class="app-modal-stack">
         <h2 id="app-modal-title" class="app-modal-title">编辑账号</h2>
-        <p class="app-modal-sub">修改 device_id（32 位小写 hex）、备注与本地 wxid。请先停止机器人再保存。</p>
+        <p id="app-modal-edit-sub" class="app-modal-sub">修改 device_id、备注与本地 wxid。请先停止机器人再保存。</p>
         <form id="modal-edit-form" class="modal-form" onsubmit="submitEditAccount(event)">
           <input type="hidden" id="modal-edit-index" value="" />
           <div class="modal-field">
@@ -231,10 +220,8 @@
               id="modal-edit-device"
               class="modal-input device-id-input"
               required
-              maxlength="32"
               autocomplete="off"
               spellcheck="false"
-              title="32位小写十六进制，仅 0-9 与 a-f"
             />
           </div>
           <div class="modal-field">
@@ -499,15 +486,11 @@
     }
 
     function normalizeDeviceId(s) {
-      return String(s || '')
-        .trim()
-        .toLowerCase();
+      return String(s || '').trim();
     }
 
     function deviceIdValidationError(did) {
       if (!did) return 'device_id 不能为空';
-      if (did.length !== 32) return 'device_id 须为 32 位十六进制，当前 ' + did.length + ' 位';
-      if (!/^[a-f0-9]{32}$/.test(did)) return 'device_id 只能包含小写 a–f 与数字 0–9';
       return null;
     }
 
@@ -548,17 +531,13 @@
       }
       if (ev === 'qr_ready') {
         const b64 = (msg.qr_base64 || '').replace(/\s/g, '');
-        const scanUrl = esc(msg.qr_url || ('http://weixin.qq.com/x/' + msg.uuid));
         if (panel) {
           panel.innerHTML =
             '<div class="acc-qr-placeholder">' +
-            '<span class="acc-uuid-label">UUID</span>' +
-            '<code class="acc-uuid">' + esc(msg.uuid) + '</code>' +
-            '<a class="acc-scan-link" href="' + scanUrl + '" target="_blank" rel="noopener">浏览器打开扫码</a>' +
             '<div class="acc-qr-frame"><img class="qr" alt="微信登录二维码" src="data:image/png;base64,' + b64 + '" onerror="this.style.display=\'none\'" /></div>' +
             '</div>';
         }
-        if (st) st.innerHTML = '<span class="info">请使用微信扫描右侧二维码</span>';
+        if (st) st.innerHTML = '<span class="info">请使用微信扫描二维码</span>';
         return;
       }
       if (ev === 'poll') {
@@ -620,15 +599,7 @@
       return '<span class="badge badge-off">未运行</span>';
     }
 
-    function updateStartAllButton(accounts) {
-      const btnAll = document.getElementById('btn-start-all');
-      if (!btnAll) return;
-      const allBusy = accounts.length > 0 && accounts.every((a) => a.running || a.pending_login);
-      btnAll.disabled = allBusy;
-    }
-
     function softPatchAccounts(data) {
-      updateStartAllButton(data.accounts);
       const cards = document.querySelectorAll('.account-card[data-idx]');
       if (cards.length !== data.accounts.length) return false;
 
@@ -639,10 +610,12 @@
         const badgeSlot = card.querySelector('.acc-badges');
         if (titleEl) titleEl.textContent = acc.remark || '(未备注)';
         if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
-        const d = card.querySelector('.acc-device');
         const w = card.querySelector('.acc-wxid');
-        if (d) d.textContent = acc.device_id;
-        if (w) w.textContent = acc.wxid || '—';
+        if (w) { w.textContent = acc.wxid || '—'; w.title = acc.wxid || ''; }
+
+        if (acc.pending_login && !card.classList.contains('is-expanded')) {
+          setAccountExpanded(index, true);
+        }
 
         const running = acc.running;
         const pending = acc.pending_login;
@@ -660,25 +633,57 @@
       return true;
     }
 
+    const expandedAccounts = new Set();
+
+    function setAccountExpanded(index, exp) {
+      const card = document.querySelector('.account-card[data-idx="' + index + '"]');
+      if (!card) return;
+      const cur = card.classList.contains('is-expanded');
+      if (cur === !!exp) return;
+      card.classList.toggle('is-expanded', !!exp);
+      const chev = card.querySelector('.acc-row-chevron');
+      if (chev) chev.setAttribute('aria-expanded', exp ? 'true' : 'false');
+      const wrap = card.querySelector('.acc-row-detail-wrap');
+      if (wrap) wrap.setAttribute('aria-hidden', exp ? 'false' : 'true');
+      if (exp) expandedAccounts.add(index);
+      else expandedAccounts.delete(index);
+    }
+
+    function toggleAccountCard(index) {
+      const card = document.querySelector('.account-card[data-idx="' + index + '"]');
+      if (!card) return;
+      setAccountExpanded(index, !card.classList.contains('is-expanded'));
+    }
+
+    function onAccountRowClick(ev, index) {
+      if (!ev || !ev.target) return;
+      if (ev.target.closest('button, a, input, select, textarea')) return;
+      toggleAccountCard(index);
+    }
+
     function buildAccountRow(acc, index) {
       const running = acc.running;
       const pending = acc.pending_login;
       const disableStart = running || pending;
       const disableMutate = running || pending;
       const badge = badgeHtml(acc);
+      const wx = acc.wxid || '';
+      const isExpanded = pending || expandedAccounts.has(index);
+      const expCls = isExpanded ? ' is-expanded' : '';
+      const ariaExp = isExpanded ? 'true' : 'false';
+      const ariaHid = isExpanded ? 'false' : 'true';
 
       return (
-        '<div class="account-card" data-idx="' + index + '">' +
-        '<div class="acc-card-inner">' +
-        '<div class="acc-card-main">' +
-        '<div class="acc-card-head">' +
+        '<div class="account-card' + expCls + '" data-idx="' + index + '">' +
+        '<div class="acc-row" onclick="onAccountRowClick(event,' + index + ')">' +
+        '<div class="acc-row-head">' +
         '<h3 class="acc-title">' + esc(acc.remark || '(未备注)') + '</h3>' +
-        '<div class="acc-badges">' + badge + '</div></div>' +
-        '<dl class="acc-meta-list">' +
-        '<div class="acc-meta-row"><dt>device</dt><dd class="acc-device">' + esc(acc.device_id) + '</dd></div>' +
-        '<div class="acc-meta-row"><dt>wxid</dt><dd class="acc-wxid">' + esc(acc.wxid || '—') + '</dd></div>' +
-        '</dl>' +
-        '<div class="actions acc-actions">' +
+        '<div class="acc-badges">' + badge + '</div>' +
+        '</div>' +
+        '<div class="acc-row-meta">' +
+        '<span class="acc-wxid" title="' + esc(wx) + '">' + esc(wx || '—') + '</span>' +
+        '</div>' +
+        '<div class="actions acc-actions" onclick="event.stopPropagation()">' +
         '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
         (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>' +
         '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
@@ -687,37 +692,43 @@
         (disableMutate ? ' disabled' : '') + '>编辑</button>' +
         '<button type="button" class="btn btn-danger acc-btn-del" data-del="' + index + '" onclick="deleteAccount(' + index + ')"' +
         (disableMutate ? ' disabled' : '') + '>删除</button>' +
-        '</div></div>' +
-        '<aside class="acc-card-side">' +
+        '</div>' +
+        '<button type="button" class="acc-row-chevron" aria-expanded="' + ariaExp + '" aria-controls="acc-detail-' + index + '" title="展开/收起二维码与状态" onclick="event.stopPropagation();toggleAccountCard(' + index + ')">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
+        '</button>' +
+        '</div>' +
+        '<div class="acc-row-detail-wrap" id="acc-detail-' + index + '" aria-hidden="' + ariaHid + '">' +
+        '<div class="acc-row-detail">' +
+        '<div class="acc-row-detail-inner">' +
         '<div class="acc-qr-shell">' +
         '<p class="acc-qr-hint" id="qr-hint-' + index + '">启动后，二维码与登录状态将显示在此</p>' +
         '<div class="acc-qr-panel" id="qr-panel-' + index + '"></div>' +
         '<div class="status-line acc-status" id="status-' + index + '"></div>' +
-        '</div></aside></div></div>'
+        '</div>' +
+        '</div>' +
+        '</div>' +
+        '</div>' +
+        '</div>'
       );
     }
 
     async function refreshAccounts(opts) {
       opts = opts || {};
       const soft = opts.soft === true;
-      const btn = document.getElementById('btn-refresh');
-      if (btn) btn.disabled = true;
-      try {
-        const data = await fetchJson('/api/accounts');
-        _lastAccountsPayload = data.accounts;
-        const host = document.getElementById('accounts');
-        if (soft && host.querySelector('.account-card')) {
-          if (softPatchAccounts(data)) {
-            populateLogAccountSelect(data.accounts);
-            return;
-          }
+      const data = await fetchJson('/api/accounts');
+      _lastAccountsPayload = data.accounts;
+      const host = document.getElementById('accounts');
+      if (soft && host.querySelector('.account-card')) {
+        if (softPatchAccounts(data)) {
+          populateLogAccountSelect(data.accounts);
+          return;
         }
-        updateStartAllButton(data.accounts);
-        host.innerHTML = data.accounts.map((acc, index) => buildAccountRow(acc, index)).join('');
-        populateLogAccountSelect(data.accounts);
-      } finally {
-        if (btn) btn.disabled = false;
       }
+      for (const idx of Array.from(expandedAccounts)) {
+        if (idx >= data.accounts.length) expandedAccounts.delete(idx);
+      }
+      host.innerHTML = data.accounts.map((acc, index) => buildAccountRow(acc, index)).join('');
+      populateLogAccountSelect(data.accounts);
     }
 
     function populateLogAccountSelect(accounts) {
@@ -760,6 +771,7 @@
     }
 
     async function startBot(index) {
+      setAccountExpanded(index, true);
       const st = document.getElementById('status-' + index);
       if (st) st.innerHTML = '<span class="info">正在连接事件通道并启动…</span>';
       try {
@@ -795,45 +807,30 @@
         delete accountWs[index];
       }
       clearAccountQrUi(index);
+      setAccountExpanded(index, false);
       await refreshAccounts({ soft: true });
     }
 
-    async function startAll() {
-      try {
-        const data = await fetchJson('/api/accounts');
-        for (let i = 0; i < data.accounts.length; i++) {
-          await ensureAccountWs(i);
-        }
-        await new Promise((r) => setTimeout(r, 150));
-        await fetchJson('/api/start-all', { method: 'POST' });
-        await refreshAccounts({ soft: true });
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    async function addAccount(e) {
-      e.preventDefault();
-      const device_id = normalizeDeviceId(document.getElementById('new-device').value);
-      const remark = document.getElementById('new-remark').value.trim();
-      const didErr = deviceIdValidationError(device_id);
-      if (didErr) {
-        showToast(didErr, 'warning');
-        return;
-      }
-      if (!remark) {
-        showToast('请填写机器人备注', 'warning');
-        return;
-      }
-      await fetchJson('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id, remark }),
-      });
-      document.getElementById('new-device').value = '';
-      document.getElementById('new-remark').value = '';
-      await refreshAccounts({ soft: false });
-      showToast('账号已添加', 'success');
+    function openAddAccountModal() {
+      resetConfirmModal();
+      document.getElementById('app-modal-edit').hidden = false;
+      document.getElementById('app-modal-confirm').hidden = true;
+      var panel = document.querySelector('.app-modal-panel');
+      if (panel) panel.setAttribute('aria-labelledby', 'app-modal-title');
+      document.getElementById('app-modal-title').textContent = '新增账号';
+      var sub = document.getElementById('app-modal-edit-sub');
+      if (sub) sub.textContent = '填写 device_id 和备注。wxid 可留空（登录后自动写入）。';
+      document.getElementById('modal-edit-index').value = '';
+      document.getElementById('modal-edit-device').value = '';
+      document.getElementById('modal-edit-remark').value = '';
+      document.getElementById('modal-edit-wxid').value = '';
+      var submitBtn = document.getElementById('modal-edit-submit');
+      if (submitBtn) submitBtn.textContent = '添加';
+      openAppModal();
+      setTimeout(function () {
+        var el = document.getElementById('modal-edit-device');
+        if (el) el.focus();
+      }, 30);
     }
 
     function closeAppModal() {
@@ -1048,6 +1045,11 @@
       document.getElementById('app-modal-confirm').hidden = true;
       var panel = document.querySelector('.app-modal-panel');
       if (panel) panel.setAttribute('aria-labelledby', 'app-modal-title');
+      document.getElementById('app-modal-title').textContent = '编辑账号';
+      var sub = document.getElementById('app-modal-edit-sub');
+      if (sub) sub.textContent = '修改 device_id、备注与本地 wxid。请先停止机器人再保存。';
+      var submitBtn = document.getElementById('modal-edit-submit');
+      if (submitBtn) submitBtn.textContent = '保存';
       document.getElementById('modal-edit-index').value = String(index);
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
@@ -1061,8 +1063,8 @@
 
     async function submitEditAccount(e) {
       e.preventDefault();
-      var index = parseInt(document.getElementById('modal-edit-index').value, 10);
-      if (isNaN(index)) return;
+      var indexVal = document.getElementById('modal-edit-index').value;
+      var isAdd = indexVal === '';
       var btn = document.getElementById('modal-edit-submit');
       var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
       var remark = document.getElementById('modal-edit-remark').value.trim();
@@ -1072,16 +1074,32 @@
         showToast(didErr, 'warning');
         return;
       }
+      if (isAdd && !remark) {
+        showToast('请填写机器人备注', 'warning');
+        return;
+      }
       if (btn) btn.disabled = true;
       try {
-        await fetchJson('/api/accounts/' + index, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
-        });
+        if (isAdd) {
+          var body = { device_id: device_id, remark: remark };
+          if (wxid) body.wxid = wxid;
+          await fetchJson('/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        } else {
+          var index = parseInt(indexVal, 10);
+          if (isNaN(index)) return;
+          await fetchJson('/api/accounts/' + index, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
+          });
+        }
         closeAppModal();
         await refreshAccounts({ soft: false });
-        showToast('已保存');
+        showToast(isAdd ? '账号已添加' : '已保存', 'success');
       } catch (err) {
         alert(err.message);
       } finally {
