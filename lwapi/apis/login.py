@@ -1,7 +1,6 @@
 # lwapi/apis/login.py
 import asyncio
 import time
-from datetime import datetime, timedelta
 from enum import IntEnum
 from typing import Optional, Dict, Any, Tuple, AsyncIterator, Callable, Awaitable
 
@@ -16,11 +15,6 @@ from ..models.login import (
     QRCheckResponse,
     ProxyInfo,
 )
-
-
-# 每天必须发送 Reportclientcheck 的本地时刻（凌晨 3:10）
-_DAILY_REPORT_HOUR = 3
-_DAILY_REPORT_MINUTE = 10
 
 
 class QRStatus(IntEnum):
@@ -199,8 +193,8 @@ class LoginClient:
     def __init__(self, transport: AsyncHTTPTransport):
         self.t = transport
 
-        # 服务端已维持心跳，客户端不再单独发送 /Login/HeartBeat。
-        # 这里只保留环境维持任务：周期性 SecAutoAuth、Reportclientcheck（含每日 03:10 强制上报）。
+        # 服务端已维持心跳与环境上报，客户端不再单独发送 /Login/HeartBeat 或 Reportclientcheck。
+        # 这里只保留周期性 SecAutoAuth 任务。
         self._maint_task: Optional[asyncio.Task] = None
         self._stop_maint = asyncio.Event()
 
@@ -383,64 +377,24 @@ class LoginClient:
                     "failures": ev.get("failures"),
                 }
 
-    # ==================== 环境维持（SecAutoAuth / Reportclientcheck） ====================
-    @staticmethod
-    def _next_daily_report_ts(now_wall: Optional[float] = None) -> float:
-        """返回下一次本地凌晨 03:10 的 time.time() 时间戳（严格大于 now_wall）。"""
-        if now_wall is None:
-            now_wall = time.time()
-        now_dt = datetime.fromtimestamp(now_wall)
-        target = now_dt.replace(
-            hour=_DAILY_REPORT_HOUR,
-            minute=_DAILY_REPORT_MINUTE,
-            second=0,
-            microsecond=0,
-        )
-        if target <= now_dt:
-            target += timedelta(days=1)
-        return target.timestamp()
-
-    async def _maint_worker(self, sec_interval: int, report_interval: int) -> None:
+    # ==================== 环境维持（SecAutoAuth） ====================
+    async def _maint_worker(self, sec_interval: int) -> None:
         """
-        周期任务：
-        - 每隔 sec_interval 调用 SecAutoAuth（默认 8 小时）；
-        - 每隔 report_interval 调用 Reportclientcheck（默认 1 小时）；
-        - 每天本地时间 03:10 必发一次 Reportclientcheck，避免错过日切窗口。
+        周期任务：每隔 sec_interval 调用 SecAutoAuth（默认 8 小时）。
+        心跳与环境上报由服务端维护，客户端不再发送 Reportclientcheck。
         """
         self._stop_maint.clear()
-        now_mono = time.monotonic()
-        next_sec_mono = now_mono + sec_interval
-        next_report_mono = now_mono + report_interval
-        # 凌晨 03:10 用墙钟时间表达，避免 monotonic 偏差累积。
-        next_daily_wall = self._next_daily_report_ts()
+        next_sec_mono = time.monotonic() + sec_interval
         try:
             while not self._stop_maint.is_set():
                 now_mono = time.monotonic()
-                now_wall = time.time()
 
                 if now_mono >= next_sec_mono:
                     await self.sec_auto_login()
                     next_sec_mono = time.monotonic() + sec_interval
                     continue
 
-                # 普通小时级上报与每日 03:10 上报共用同一接口，
-                # 任一到点即触发；触发后两个计划都顺延，避免相近时间内重复发送。
-                hourly_due = now_mono >= next_report_mono
-                daily_due = now_wall >= next_daily_wall
-                if hourly_due or daily_due:
-                    if daily_due:
-                        logger.info("到达每日 03:10，触发 Reportclientcheck")
-                    await self.report_client_check()
-                    next_report_mono = time.monotonic() + report_interval
-                    if daily_due:
-                        next_daily_wall = self._next_daily_report_ts(time.time())
-                    continue
-
-                # 等待到最近的截止时刻；用 monotonic 计算距离 03:10 的秒数避免时区/夏令时陷阱。
-                hourly_wait = next_report_mono - now_mono
-                sec_wait = next_sec_mono - now_mono
-                daily_wait = next_daily_wall - now_wall
-                wait = max(0.0, min(hourly_wait, sec_wait, daily_wait))
+                wait = max(0.0, next_sec_mono - now_mono)
                 if wait <= 0:
                     continue
                 try:
@@ -460,20 +414,15 @@ class LoginClient:
         self,
         *,
         sec_interval: int = 8 * 3600,
-        report_interval: int = 3600,
     ) -> None:
-        """登录成功后启动：周期性 SecAutoAuth / Reportclientcheck（含每日 03:10 强制上报）。"""
+        """登录成功后启动：周期性 SecAutoAuth。"""
         self.stop_keepalive()
         sec_interval = max(3600, sec_interval)
-        report_interval = max(600, report_interval)
         self._maint_task = asyncio.create_task(
-            self._maint_worker(sec_interval, report_interval),
+            self._maint_worker(sec_interval),
             name="LoginClient-KeepAlive",
         )
-        logger.success(
-            f"环境刷新（SecAutoAuth 每 {sec_interval}s，Reportclientcheck 每 {report_interval}s，"
-            f"每日 {_DAILY_REPORT_HOUR:02d}:{_DAILY_REPORT_MINUTE:02d} 强制上报一次）"
-        )
+        logger.success(f"环境刷新（SecAutoAuth 每 {sec_interval}s）")
 
     def stop_keepalive(self) -> None:
         """立即停止缓存刷新任务（安全、可重复调用）。"""
@@ -532,13 +481,4 @@ class LoginClient:
             return True
         except (ApiError, HttpError) as e:
             logger.warning(f"会话唤醒失败: {e}")
-            return False
-
-    async def report_client_check(self) -> bool:
-        try:
-            await self.t.post("/Login/Reportclientcheck")
-            logger.info("客户端环境上报成功")
-            return True
-        except (ApiError, HttpError) as e:
-            logger.error(f"环境上报失败: {e}")
             return False

@@ -2,11 +2,10 @@
 多账号机器人运行时：每个账号一个 asyncio.Task，内部循环为「登录 → 收消息」。
 
 职责概要：
-- 使用 account_slot_key 作为任务字典键（备注+device_id），避免 device_id 重复时冲突；
+- 使用 accounts.json 行下标作为任务字典键；登录后 device_id 可能回写，不宜再用备注+device_id 作键；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
-- 登录成功后启动 LoginClient 内在线维持任务（默认每 8h SecAutoAuth、每 1h Reportclientcheck，
-  并在每天本地凌晨 03:10 强制再发一次 Reportclientcheck）、以及登录后立即一次环境上报；
-  心跳由服务端维护，客户端不再单独发送 HeartBeat。
+- 登录成功后启动 LoginClient 内在线维持任务（默认每 8h SecAutoAuth）；
+  心跳与环境上报由服务端维护，客户端不再单独发送 HeartBeat / Reportclientcheck。
 - 消息处理委托给 message_handler.default_message_handler。
 - 任务取消或 `LwApiClient` 退出时：`aclose` 会依次停止消息轮询并 `join_background_tasks`，
   使在线维持协程完全结束后再关闭连接。
@@ -32,7 +31,7 @@ from lwapi import LwApiClient
 from lwapi.exceptions import LoginError
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
-from src.account_loader import account_slot_key, save_accounts
+from src.account_loader import save_accounts
 from src.login_service import LoginService
 from src.message_handler import default_message_handler
 from src.plugins.lifecycle import notify_bot_offline, notify_bot_online
@@ -63,7 +62,7 @@ class BotService:
     """管理多个账号机器人协程的启动、停止与运行槽位查询。"""
 
     def __init__(self, account_events: Optional[AccountEventHub] = None) -> None:
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._tasks: Dict[int, asyncio.Task] = {}
         self._lock = asyncio.Lock()
         self._events = account_events
         self._login_pending: Set[int] = set()
@@ -76,14 +75,15 @@ class BotService:
     async def start_one(
         self, account: dict, all_accounts: list, account_idx: int
     ) -> None:
-        """若该槽位尚无活跃任务，则为该账号启动 _run_single_bot 协程。"""
-        slot = account_slot_key(account)
+        """若该账号行尚无活跃任务，则为该账号启动 _run_single_bot 协程。"""
         async with self._lock:
-            if slot in self._tasks and not self._tasks[slot].done():
+            task = self._tasks.get(account_idx)
+            if task is not None and not task.done():
                 return
-            self._tasks[slot] = asyncio.create_task(
+            remark = effective_account_remark(account)
+            self._tasks[account_idx] = asyncio.create_task(
                 self._run_single_bot(account, all_accounts, account_idx),
-                name=f"bot-{slot[:80]}",
+                name=f"bot-{account_idx}-{remark[:40]}",
             )
 
     async def start_all(self, accounts: list) -> None:
@@ -91,15 +91,14 @@ class BotService:
         for i, account in enumerate(accounts):
             await self.start_one(account, accounts, i)
 
-    def running_slot_keys(self) -> list[str]:
-        """返回当前未结束的机器人任务对应的 account_slot_key 列表。"""
-        return [k for k, v in self._tasks.items() if not v.done()]
+    def running_account_indices(self) -> set[int]:
+        """返回当前未结束的机器人任务对应的 accounts.json 行下标集合。"""
+        return {i for i, t in self._tasks.items() if not t.done()}
 
-    async def stop_for_account(self, account: dict) -> bool:
-        """按账号行取消对应任务；若本来未运行则返回 False。"""
-        slot = account_slot_key(account)
+    async def stop_for_account(self, account_idx: int) -> bool:
+        """按账号行下标取消对应任务；若本来未运行则返回 False。"""
         async with self._lock:
-            task = self._tasks.pop(slot, None)
+            task = self._tasks.pop(account_idx, None)
         if task is None:
             return False
         if not task.done():
@@ -175,30 +174,14 @@ class BotService:
                         if self._events:
                             await emit({"event": "login_saved", "wxid": wxid})
 
-                        # 服务端维护心跳和在线状态，客户端只需保持连接并周期性上报环境
-                        # （SecAutoAuth 默认 8h，Reportclientcheck 默认 1h，每日 03:10 必发）。
+                        # 服务端维护心跳、在线状态与环境上报，客户端只需保持连接并周期性 SecAutoAuth
+                        # （默认 8h）。
                         sec_iv = _env_int(
                             "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
                             8 * 3600,
                             3600,
                         )
-                        report_iv = _env_int(
-                            "LWAPI_REPORT_CLIENT_CHECK_INTERVAL_SECONDS",
-                            3600,
-                            600,
-                        )
-                        client.login.start_keepalive(
-                            sec_interval=sec_iv,
-                            report_interval=report_iv,
-                        )
-                        if await client.login.report_client_check():
-                            bot_logger.info(
-                                f"【{remark}】客户端环境已上报（Reportclientcheck）"
-                            )
-                        else:
-                            bot_logger.warning(
-                                f"【{remark}】Reportclientcheck 未成功，将继续运行"
-                            )
+                        client.login.start_keepalive(sec_interval=sec_iv)
                         sync_mode = DEFAULT_MSG_SYNC_MODE
                         client.msg.start(
                             handler=default_message_handler,

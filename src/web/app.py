@@ -16,7 +16,7 @@ from aiohttp import web, WSMsgType
 from lwapi.exceptions import ApiError, HttpError
 
 from src.app_paths import static_dir
-from src.account_loader import account_slot_key, load_accounts_safe, save_accounts
+from src.account_loader import load_accounts_safe, save_accounts
 from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import clear_inbox, query_list, query_summary
 from src.plugins.lifecycle import plugin_background_lifespan
@@ -111,12 +111,12 @@ class AdminWebApp:
     async def index(self, request: web.Request) -> web.Response:
         return web.FileResponse(STATIC_DIR / "index.html")
 
-    def _is_running(self, acc: dict) -> bool:
-        return account_slot_key(acc) in set(self.bot_service.running_slot_keys())
+    def _is_running(self, account_idx: int) -> bool:
+        return account_idx in self.bot_service.running_account_indices()
 
     async def api_accounts(self, request: web.Request) -> web.Response:
         accounts = load_accounts_safe()
-        running = set(self.bot_service.running_slot_keys())
+        running = self.bot_service.running_account_indices()
         pending = self.bot_service.login_pending_indices
         output = []
         for i, acc in enumerate(accounts):
@@ -124,7 +124,7 @@ class AdminWebApp:
             output.append(
                 {
                     **clean,
-                    "running": account_slot_key(acc) in running,
+                    "running": i in running,
                     "pending_login": i in pending,
                 }
             )
@@ -185,7 +185,7 @@ class AdminWebApp:
         accounts = load_accounts_safe()
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
-        if self._is_running(accounts[idx]):
+        if self._is_running(idx):
             return web.json_response(
                 {"error": "该账号机器人运行中，请先停止后再编辑"}, status=409
             )
@@ -213,7 +213,7 @@ class AdminWebApp:
         accounts = load_accounts_safe()
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
-        if self._is_running(accounts[idx]):
+        if self._is_running(idx):
             return web.json_response(
                 {"error": "该账号机器人运行中，请先停止后再删除"}, status=409
             )
@@ -259,7 +259,7 @@ class AdminWebApp:
         accounts = load_accounts_safe()
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
-        stopped = await self.bot_service.stop_for_account(accounts[idx])
+        stopped = await self.bot_service.stop_for_account(idx)
         return web.json_response({"ok": True, "stopped": stopped})
 
     async def api_start_all(self, request: web.Request) -> web.Response:

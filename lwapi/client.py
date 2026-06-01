@@ -19,8 +19,8 @@ class LwApiClient:
     """
     LwApi 异步 SDK。
 
-    - ``login``：扫码登录、环境维持（SecAutoAuth / Reportclientcheck）等（LoginClient）。
-      心跳由服务端维护，SDK 不再单独发送 HeartBeat。
+    - ``login``：扫码登录、环境维持（SecAutoAuth）等（LoginClient）。
+      心跳与环境上报由服务端维护，SDK 不再单独发送 HeartBeat / Reportclientcheck。
     - ``msg``：消息长轮询与各类发送接口（参数由 SDK 组装 JSON）。
     - ``favor`` / ``friend`` / ``group`` 等：其它业务域的同类封装。
     """

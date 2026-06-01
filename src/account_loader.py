@@ -1,8 +1,8 @@
 """
 账号配置读写与「逻辑槽位」键。
 
-本模块负责 config/accounts.json，并提供 account_slot_key：同一表中 device_id 可重复，
-启动/停止/运行状态必须以「备注 + device_id」区分不同行，避免任务互相覆盖。
+本模块负责 config/accounts.json。account_slot_key 可用于日志等场景区分同行配置；
+机器人任务以 accounts.json 行下标跟踪，因扫码登录后 device_id 可能被服务端回写。
 """
 
 from __future__ import annotations
