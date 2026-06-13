@@ -1162,16 +1162,14 @@ html.theme-light .account-card {
   border-color: var(--border-strong);
 }
 
-/* 行内手风琴：折叠条 + 抽屉（Grid 四列对齐） */
+/* 账号行：Grid 对齐 */
 .acc-row {
   display: grid;
-  grid-template-columns: auto minmax(200px, 280px) minmax(0, 1fr) auto auto;
-  grid-template-areas: "avatar head meta actions chevron";
+  grid-template-columns: auto minmax(200px, 280px) minmax(0, 1fr) auto;
+  grid-template-areas: "avatar head meta actions";
   align-items: center;
   gap: 12px 18px;
   padding: 14px 22px;
-  cursor: pointer;
-  user-select: none;
   transition: background 0.18s ease;
 }
 
@@ -1371,41 +1369,6 @@ html.theme-light .acc-row-meta .acc-wxid {
 
 .acc-actions .btn { padding: 7px 14px; font-size: 0.76rem; }
 
-.acc-row-chevron {
-  grid-area: chevron;
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  cursor: pointer;
-  padding: 0;
-  transition: transform 0.24s ease, color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.acc-row-chevron:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background: rgba(123, 140, 248, 0.08);
-}
-
-.acc-row-chevron:focus-visible {
-  outline: none;
-  border-color: var(--star);
-  box-shadow: 0 0 0 3px var(--star-soft);
-}
-
-.account-card.is-expanded .acc-row-chevron {
-  transform: rotate(180deg);
-  color: var(--star);
-  border-color: rgba(123, 140, 248, 0.4);
-  background: var(--star-soft);
-}
-
 .acc-row-detail-wrap {
   display: grid;
   grid-template-rows: 0fr;
@@ -1439,11 +1402,11 @@ html.theme-light .acc-row-meta .acc-wxid {
 
 @media (max-width: 760px) {
   .acc-row {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr;
     grid-template-areas:
-      "avatar head chevron"
-      "meta meta meta"
-      "actions actions actions";
+      "avatar head"
+      "meta meta"
+      "actions actions";
     gap: 10px 12px;
     padding: 12px 16px;
   }

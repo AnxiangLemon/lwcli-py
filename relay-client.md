@@ -544,29 +544,3 @@ curl -s "$LWAPI/api/Login/Relay/Biz/Prepare" \
   -d '{"sessionId":"rs_xxx","flow":"qr_get"}' | jq .
 ```
 
----
-
-## 12. 与旧接口关系
-
-| 旧接口（服务端直连微信） | Relay 等价 |
-|--------------------------|------------|
-| POST /api/Login/QRGet | Init + Biz(qr_get) |
-| POST /api/Login/QRCheck | Biz(qr_check) + Biz(sec_manual_auth) |
-| POST /api/Login/SecAutoAuth | Init + Biz(sec_auto_auth) |
-
-旧接口**保持不变**；Relay 为新增路径，互不影响。
-
----
-
-## 13. 源码索引（维护用）
-
-| 路径 | 说明 |
-|------|------|
-| `internal/service/relay/types.go` | 请求/响应/result 定义 |
-| `internal/service/relay/init.go` | Init 逻辑 |
-| `internal/service/relay/biz_prepare.go` | Biz Prepare |
-| `internal/service/relay/biz_complete.go` | Biz Complete |
-| `internal/mmtls/relay_*.go` | MMTLS 组包/解包 |
-| `internal/api/controllers/wx/relay.go` | HTTP 入口 |
-
-Swagger：`GET /docs` 搜索 `Relay`。

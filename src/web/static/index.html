@@ -236,15 +236,15 @@
             <span class="modal-field-label">登录方式</span>
             <div class="modal-radio-group" role="radiogroup" aria-label="登录方式">
               <label class="modal-radio">
-                <input type="radio" name="modal-login-mode" id="modal-login-mode-remote" value="remote" />
-                <span class="modal-radio-text">
-                  <strong>远程登录</strong>
-                </span>
-              </label>
-              <label class="modal-radio">
                 <input type="radio" name="modal-login-mode" id="modal-login-mode-local" value="local" checked />
                 <span class="modal-radio-text">
                   <strong>本地登录</strong>
+                </span>
+              </label>
+              <label class="modal-radio">
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-remote" value="remote" />
+                <span class="modal-radio-text">
+                  <strong>远程登录</strong>
                 </span>
               </label>
             </div>
@@ -829,9 +829,8 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       if (w) { w.textContent = acc.wxid || '—'; w.title = acc.wxid || ''; }
       if (!acc.pending_login && !acc.running) {
         clearAccountQrUi(index);
-      } else if (acc.pending_login && !card.classList.contains('is-expanded')) {
-        setAccountExpanded(index, true);
       }
+      setAccountExpanded(index, !!acc.pending_login);
       const running = acc.running;
       const pending = acc.pending_login;
       const disableStart = running || pending;
@@ -858,32 +857,14 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       return true;
     }
 
-    const expandedAccounts = new Set();
-
     function setAccountExpanded(index, exp) {
       const card = document.querySelector('.account-card[data-idx="' + index + '"]');
       if (!card) return;
       const cur = card.classList.contains('is-expanded');
       if (cur === !!exp) return;
       card.classList.toggle('is-expanded', !!exp);
-      const chev = card.querySelector('.acc-row-chevron');
-      if (chev) chev.setAttribute('aria-expanded', exp ? 'true' : 'false');
       const wrap = card.querySelector('.acc-row-detail-wrap');
       if (wrap) wrap.setAttribute('aria-hidden', exp ? 'false' : 'true');
-      if (exp) expandedAccounts.add(index);
-      else expandedAccounts.delete(index);
-    }
-
-    function toggleAccountCard(index) {
-      const card = document.querySelector('.account-card[data-idx="' + index + '"]');
-      if (!card) return;
-      setAccountExpanded(index, !card.classList.contains('is-expanded'));
-    }
-
-    function onAccountRowClick(ev, index) {
-      if (!ev || !ev.target) return;
-      if (ev.target.closest('button, a, input, select, textarea')) return;
-      toggleAccountCard(index);
     }
 
     function buildAccountRow(acc, index) {
@@ -894,14 +875,13 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const badge = badgeHtml(acc);
       const wx = acc.wxid || '';
       const stateCls = accountCardStateClass(acc);
-      const isExpanded = pending || expandedAccounts.has(index);
+      const isExpanded = !!pending;
       const expCls = isExpanded ? ' is-expanded' : '';
-      const ariaExp = isExpanded ? 'true' : 'false';
       const ariaHid = isExpanded ? 'false' : 'true';
 
       return (
         '<div class="account-card ' + stateCls + expCls + '" data-idx="' + index + '">' +
-        '<div class="acc-row" onclick="onAccountRowClick(event,' + index + ')">' +
+        '<div class="acc-row">' +
         accountAvatarHtml(acc) +
         '<div class="acc-row-head">' +
         '<h3 class="acc-title">' + accountTitleHtml(acc) + '</h3>' +
@@ -910,7 +890,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         '<div class="acc-row-meta">' +
         '<span class="acc-wxid" title="' + esc(wx) + '">' + esc(wx || '—') + '</span>' +
         '</div>' +
-        '<div class="actions acc-actions" onclick="event.stopPropagation()">' +
+        '<div class="actions acc-actions">' +
         '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
         (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>' +
         '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
@@ -920,9 +900,6 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         '<button type="button" class="btn btn-danger acc-btn-del" data-del="' + index + '" onclick="deleteAccount(' + index + ')"' +
         (disableMutate ? ' disabled' : '') + '>删除</button>' +
         '</div>' +
-        '<button type="button" class="acc-row-chevron" aria-expanded="' + ariaExp + '" aria-controls="acc-detail-' + index + '" title="展开/收起二维码与状态" onclick="event.stopPropagation();toggleAccountCard(' + index + ')">' +
-        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>' +
-        '</button>' +
         '</div>' +
         '<div class="acc-row-detail-wrap" id="acc-detail-' + index + '" aria-hidden="' + ariaHid + '">' +
         '<div class="acc-row-detail">' +
@@ -951,10 +928,9 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
           return;
         }
       }
-      for (const idx of Array.from(expandedAccounts)) {
-        if (idx >= data.accounts.length) expandedAccounts.delete(idx);
-      }
+      const qrSnap = snapshotPendingQrPanels(data.accounts);
       host.innerHTML = data.accounts.map((acc, index) => buildAccountRow(acc, index)).join('');
+      restorePendingQrPanels(qrSnap);
       populateLogAccountSelect(data.accounts);
     }
 
@@ -1020,6 +996,38 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       if (panel) panel.innerHTML = '';
       if (st) st.innerHTML = '';
       delete _qrLoginUi[index];
+    }
+
+    function snapshotPendingQrPanels(accounts) {
+      const snap = {};
+      (accounts || []).forEach((acc, index) => {
+        if (!acc.pending_login) return;
+        const panel = document.getElementById('qr-panel-' + index);
+        const st = document.getElementById('status-' + index);
+        snap[index] = {
+          panelHtml: panel ? panel.innerHTML : '',
+          statusHtml: st ? st.innerHTML : '',
+          ui: _qrLoginUi[index] ? Object.assign({}, _qrLoginUi[index]) : undefined,
+          expanded: !!acc.pending_login,
+        };
+      });
+      return snap;
+    }
+
+    function restorePendingQrPanels(snap) {
+      if (!snap) return;
+      Object.keys(snap).forEach((key) => {
+        const index = parseInt(key, 10);
+        const s = snap[key];
+        if (!s || isNaN(index)) return;
+        const panel = document.getElementById('qr-panel-' + index);
+        const st = document.getElementById('status-' + index);
+        if (panel) panel.innerHTML = s.panelHtml || '';
+        if (st) st.innerHTML = s.statusHtml || '';
+        if (s.ui) _qrLoginUi[index] = s.ui;
+        else delete _qrLoginUi[index];
+        if (s.expanded) setAccountExpanded(index, true);
+      });
     }
 
     async function stopBot(index) {
@@ -1294,7 +1302,7 @@ function openConfirmModal(opts) {
           });
         }
         closeAppModal();
-        await refreshAccounts({ soft: false });
+        await refreshAccounts({ soft: !isAdd });
         showToast(isAdd ? '账号已添加' : '已保存', 'success');
       } catch (err) {
         notifyError(err);
