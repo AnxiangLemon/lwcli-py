@@ -56,14 +56,14 @@ def _normalize_level(raw: str, default: str) -> str:
 def log_console_level() -> str:
     """控制台日志级别，默认跟随 LWAPI_LOG_LEVEL。"""
     _ensure_log_env()
-    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "DEBUG")
+    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "INFO")
     return _normalize_level(os.getenv("LWAPI_LOG_CONSOLE_LEVEL", ""), base)
 
 
 def log_file_level() -> str:
     """按账号文件日志级别，默认跟随 LWAPI_LOG_LEVEL。"""
     _ensure_log_env()
-    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "DEBUG")
+    base = _normalize_level(os.getenv("LWAPI_LOG_LEVEL", ""), "INFO")
     return _normalize_level(os.getenv("LWAPI_LOG_FILE_LEVEL", ""), base)
 
 

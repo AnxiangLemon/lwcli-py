@@ -4,7 +4,7 @@
 职责概要：
 - 使用 accounts.json 行下标作为任务字典键；登录后 device_id 可能回写，不宜再用备注+device_id 作键；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
-- 登录成功后启动 LoginClient 内在线维持任务（默认每 8h SecAutoAuth）；
+- 登录成功后启动 LoginClient 内在线维持任务（默认每 48h SecAutoAuth）；
   心跳与环境上报由服务端维护，客户端不再单独发送 HeartBeat / Reportclientcheck。
 - 消息处理委托给 message_handler.default_message_handler。
 - 任务取消或 `LwApiClient` 退出时：`aclose` 会依次停止消息轮询并 `join_background_tasks`，
@@ -235,10 +235,10 @@ class BotService:
                             )
 
                         # 服务端维护心跳、在线状态与环境上报，客户端只需保持连接并周期性 SecAutoAuth
-                        # （默认 8h）。
+                        # （默认 48h）。
                         sec_iv = _env_int(
                             "LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS",
-                            8 * 3600,
+                            48 * 3600,
                             3600,
                         )
                         client.login.start_keepalive(sec_interval=sec_iv)

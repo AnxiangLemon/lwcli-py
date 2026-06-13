@@ -348,7 +348,7 @@ class LoginClient:
     # ==================== 环境维持（SecAutoAuth） ====================
     async def _maint_worker(self, sec_interval: int) -> None:
         """
-        周期任务：每隔 sec_interval 调用 SecAutoAuth（默认 8 小时）。
+        周期任务：每隔 sec_interval 调用 SecAutoAuth（默认 48 小时）。
         心跳与环境上报由服务端维护，客户端不再发送 Reportclientcheck。
         """
         self._stop_maint.clear()
@@ -381,7 +381,7 @@ class LoginClient:
     def start_keepalive(
         self,
         *,
-        sec_interval: int = 8 * 3600,
+        sec_interval: int = 48 * 3600,
     ) -> None:
         """登录成功后启动：周期性 SecAutoAuth。"""
         self.stop_keepalive()
