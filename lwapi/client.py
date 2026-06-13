@@ -7,6 +7,7 @@ from .apis.friend import FriendClient
 from .apis.group import GroupClient
 from .apis.label import LabelClient
 from .apis.login import LoginClient
+from .apis.relay import RelayClient
 from .apis.mmsns import MmSnsClient
 from .apis.msg import MsgClient
 from .apis.official import OfficialClient
@@ -32,6 +33,7 @@ class LwApiClient:
         
         t = self.transport
         self.login = LoginClient(t)
+        self.relay = RelayClient(t)
         self.msg = MsgClient(t)
 
         self.favor = FavorClient(t)
@@ -72,6 +74,9 @@ class LwApiClient:
         # 停止环境维持后台任务并等待结束，避免关闭连接池后仍有请求。
         if hasattr(self.login, "join_background_tasks"):
             await self.login.join_background_tasks()
+
+        if hasattr(self.relay, "aclose"):
+            await self.relay.aclose()
 
         # 统一通过 transport 的关闭方法释放底层连接池。
         await self.transport.aclose()

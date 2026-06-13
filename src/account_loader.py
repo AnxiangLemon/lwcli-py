@@ -38,6 +38,7 @@ def load_accounts() -> List[Dict]:
                 "wxid": "",
                 "remark": "主号",
                 "proxy": None,
+                "login_mode": "local",
             }
         ]
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)

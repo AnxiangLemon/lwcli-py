@@ -67,17 +67,35 @@ def _qr_phase_for(status_val: Optional[int]) -> str:
     }.get(st, "unknown")
 
 
-def _parse_qr_status(payload: dict) -> Tuple[Optional[int], Optional[str], Optional[str], Optional[str], Optional[int], Optional[QRStatus]]:
-    """从 QRCheck 响应解析 ret、wxid、verify_url、status。"""
+def _parse_qr_status(
+    payload: dict,
+) -> Tuple[
+    Optional[int],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[int],
+    Optional[QRStatus],
+    Optional[str],
+    Optional[str],
+    Optional[int],
+]:
+    """从 QRCheck 响应解析 ret、wxid、verify_url、status、扫码人信息。"""
     ret, err_msg = _extract_ret_errmsg(payload)
     wxid, _nickname = _extract_login_user(payload)
     verify_url: Optional[str] = None
     status_val: Optional[int] = None
     current_status: Optional[QRStatus] = None
+    nick_name: Optional[str] = None
+    head_img_url: Optional[str] = None
+    expired_time: Optional[int] = None
     try:
         qr = QRCheckResponse.model_validate(payload)
         verify_url = getattr(qr, "verifyUrl", None) or payload.get("verifyUrl")
         status_val = getattr(qr, "status", None)
+        nick_name = qr.nickName
+        head_img_url = qr.headImgUrl
+        expired_time = qr.expiredTime
         if status_val is not None:
             try:
                 current_status = QRStatus(status_val)
@@ -85,7 +103,26 @@ def _parse_qr_status(payload: dict) -> Tuple[Optional[int], Optional[str], Optio
                 current_status = None
     except Exception:
         verify_url = payload.get("verifyUrl")
-    return ret, err_msg, wxid, verify_url, status_val, current_status
+        status_val = payload.get("status")
+        nick_name = payload.get("nickName")
+        head_img_url = payload.get("headImgUrl")
+        expired_time = payload.get("expiredTime")
+        if status_val is not None:
+            try:
+                current_status = QRStatus(status_val)
+            except ValueError:
+                current_status = None
+    return (
+        ret,
+        err_msg,
+        wxid,
+        verify_url,
+        status_val,
+        current_status,
+        nick_name,
+        head_img_url,
+        expired_time,
+    )
 
 
 async def _iter_qr_poll(
@@ -115,7 +152,7 @@ async def _iter_qr_poll(
                     payload = await fetch_check()
                     net_failures = 0
                     poll_seq += 1
-                    ret, err_msg, wxid, verify_url, status_val, current_status = (
+                    ret, err_msg, wxid, verify_url, status_val, current_status, nick_name, head_img_url, expired_time = (
                         _parse_qr_status(payload)
                     )
 
@@ -149,6 +186,9 @@ async def _iter_qr_poll(
                             "raw_status": status_val,
                             "ret": ret,
                             "status": current_status,
+                            "nick_name": nick_name,
+                            "head_img_url": head_img_url,
+                            "expired_time": expired_time,
                         }
                         last_status = current_status
 
@@ -209,81 +249,6 @@ class LoginClient:
         data = await self.t.post("/Login/QRGet", json=payload.model_dump())
         return QRGetResponse.model_validate(data)
 
-   
-    async def check_qr_code(
-        self,
-        uuid: str,
-        *,
-        interval: float = 5,
-        timeout: float = 300,
-    ) -> str:
-        """
-        轮询检测二维码状态（阻塞直到成功或失败）。
-        与 stream_qr_status 共用 _iter_qr_poll 核心逻辑。
-        """
-
-        async def _fetch() -> dict:
-            payload: dict = await self.t.post(f"/Login/QRCheck?uuid={uuid}")
-            ret, err_msg = _extract_ret_errmsg(payload)
-            logger.debug(
-                f"QRCheck response: ret={ret}, errMsg={err_msg}, data={payload}"
-            )
-            return payload
-
-        async for ev in _iter_qr_poll(
-            _fetch, interval=interval, timeout=timeout
-        ):
-            t = ev["type"]
-            if t == "poll":
-                continue
-            if t == "verify_url":
-                logger.warning(
-                    f"检测到安全验证链接，请手动访问完成验证：\n{ev['url']}"
-                )
-                continue
-            if t == "status":
-                st = ev.get("status")
-                if st is QRStatus.NOT_SCANNED:
-                    logger.info("等待微信扫码...（请打开微信扫一扫）")
-                elif st is QRStatus.SCANNED:
-                    logger.info("已扫码！请在手机微信上点【登录】确认")
-                continue
-            if t == "network_warning":
-                logger.warning(
-                    f"网络异常({ev.get('failures')})：{ev.get('message')}"
-                )
-                continue
-            if t == "poll_error":
-                logger.exception(
-                    f"检查二维码异常({ev.get('failures')})：{ev.get('message')}"
-                )
-                continue
-            if t == "success":
-                wxid = ev["wxid"]
-                nickname = ev.get("nickname") or ""
-                logger.success(f"登录成功！wxid={wxid} ({nickname})")
-                return wxid
-            if t == "expired":
-                logger.error("二维码已过期")
-                raise LoginError(ev.get("message") or "二维码已过期")
-            if t == "canceled":
-                logger.error("二维码已被取消")
-                raise LoginError(ev.get("message") or "二维码已被取消")
-            if t == "api_error":
-                msg = ev.get("message") or "未知错误"
-                logger.error(f"登录失败: {msg}")
-                raise LoginError(f"登录失败: {msg}")
-            if t == "login_error":
-                raise LoginError(ev.get("message") or "登录失败")
-            if t == "timeout":
-                raise asyncio.TimeoutError(
-                    ev.get("message") or "二维码登录超时"
-                )
-            if t == "stopped":
-                raise LoginError(ev.get("message") or "监听已取消")
-
-        raise LoginError("二维码登录未完成")
-
     async def stream_qr_status(
         self,
         uuid: str,
@@ -298,7 +263,7 @@ class LoginClient:
         """
 
         async def _fetch() -> dict:
-            return await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+            return  await self.t.post(f"/Login/QRCheck?uuid={uuid}")
 
         async for ev in _iter_qr_poll(
             _fetch,
@@ -361,6 +326,9 @@ class LoginClient:
                     "phase": ev["phase"],
                     "raw_status": ev["raw_status"],
                     "ret": ev["ret"],
+                    "nick_name": ev.get("nick_name"),
+                    "head_img_url": ev.get("head_img_url"),
+                    "expired_time": ev.get("expired_time"),
                 }
             elif t == "network_warning":
                 yield {

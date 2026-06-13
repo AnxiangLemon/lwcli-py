@@ -32,7 +32,8 @@ from lwapi.exceptions import LoginError
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
 from src.account_loader import save_accounts
-from src.login_service import LoginService
+from src.login_service import LoginService, normalize_login_mode
+from src.relay_login_service import RelayLoginService
 from src.message_handler import default_message_handler
 from src.plugins.lifecycle import notify_bot_offline, notify_bot_online
 from src.runtime.account_events import AccountEventHub
@@ -48,6 +49,25 @@ DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
     os.getenv("LWAPI_MSG_SYNC_MODE"),
     default="websocket",
 )
+
+
+def _merge_account_profile(
+    acc: dict,
+    *,
+    nickname: str = "",
+    avatar_url: str = "",
+) -> bool:
+    """将扫码/登录得到的昵称与头像写入账号配置，有变化时返回 True。"""
+    changed = False
+    nick = (nickname or "").strip()
+    avatar = (avatar_url or "").strip()
+    if nick and acc.get("nickname") != nick:
+        acc["nickname"] = nick
+        changed = True
+    if avatar and acc.get("avatar_url") != avatar:
+        acc["avatar_url"] = avatar
+        changed = True
+    return changed
 
 
 def _env_int(name: str, default: int, minimum: int) -> int:
@@ -95,11 +115,14 @@ class BotService:
         """返回当前未结束的机器人任务对应的 accounts.json 行下标集合。"""
         return {i for i, t in self._tasks.items() if not t.done()}
 
-    async def stop_for_account(self, account_idx: int) -> bool:
+    async def stop_for_account(self, account_idx: int, *, remark: str = "") -> bool:
         """按账号行下标取消对应任务；若本来未运行则返回 False。"""
         async with self._lock:
             task = self._tasks.pop(account_idx, None)
         if task is None:
+            self._login_pending.discard(account_idx)
+            if remark:
+                setup_logger(remark).info(f"【{remark}】停止请求：账号未在运行")
             return False
         if not task.done():
             task.cancel()
@@ -141,6 +164,7 @@ class BotService:
         device_id = acc["device_id"]
         saved_wxid = acc.get("wxid", "").strip()
         proxy = acc.get("proxy")
+        login_mode = normalize_login_mode(acc.get("login_mode", "local"))
 
         self._login_pending.add(account_idx)
         try:
@@ -148,6 +172,30 @@ class BotService:
                 await self._events.clear_replay(account_idx)
 
             async def emit(msg: dict) -> None:
+                ev = msg.get("event")
+                if ev == "status":
+                    if _merge_account_profile(
+                        acc,
+                        nickname=str(
+                            msg.get("nick_name") or msg.get("nickname") or ""
+                        ),
+                        avatar_url=str(
+                            msg.get("head_img_url") or msg.get("avatar") or ""
+                        ),
+                    ):
+                        save_accounts(all_accounts)
+                elif ev == "success":
+                    if _merge_account_profile(
+                        acc,
+                        nickname=str(msg.get("nickname") or ""),
+                        avatar_url=str(
+                            msg.get("head_img_url")
+                            or msg.get("avatar")
+                            or msg.get("avatar_url")
+                            or ""
+                        ),
+                    ):
+                        save_accounts(all_accounts)
                 if self._events:
                     await self._events.emit(account_idx, msg)
 
@@ -155,9 +203,14 @@ class BotService:
                 wxid = ""
                 async with LwApiClient(BASE_URL) as client:
                     try:
-                        login_service = LoginService(
-                            client, device_id, proxy, remark
-                        )
+                        if login_mode == "local":
+                            login_service = RelayLoginService(
+                                client, device_id, proxy, remark
+                            )
+                        else:
+                            login_service = LoginService(
+                                client, device_id, proxy, remark
+                            )
                         use_emit = self._events is not None
                         wxid, real_device_id = await login_service.login(
                             saved_wxid,
@@ -172,7 +225,14 @@ class BotService:
                         self._login_pending.discard(account_idx)
 
                         if self._events:
-                            await emit({"event": "login_saved", "wxid": wxid})
+                            await emit(
+                                {
+                                    "event": "login_saved",
+                                    "wxid": wxid,
+                                    "nickname": acc.get("nickname") or "",
+                                    "avatar_url": acc.get("avatar_url") or "",
+                                }
+                            )
 
                         # 服务端维护心跳、在线状态与环境上报，客户端只需保持连接并周期性 SecAutoAuth
                         # （默认 8h）。
@@ -215,8 +275,22 @@ class BotService:
                             await notify_bot_offline(wxid)
                             await unregister_online_client(wxid)
                     except asyncio.CancelledError:
+                        bot_logger.info(f"【{remark}】账号已停止")
                         raise
                     except LoginError as e:
+                        if e.reason == "canceled":
+                            bot_logger.info(
+                                f"【{remark}】扫码已取消，已停止登录"
+                            )
+                            if self._events:
+                                await emit(
+                                    {
+                                        "event": "login_interrupted",
+                                        "code": "canceled",
+                                        "message": e.message or "二维码已被取消",
+                                    }
+                                )
+                            break
                         if e.recoverable:
                             bot_logger.info(
                                 f"【{remark}】登录中断（{e.reason or 'unknown'}）: {e.message}"

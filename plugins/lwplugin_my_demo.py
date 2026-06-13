@@ -124,20 +124,20 @@ async def on_app_ready() -> None:
     asyncio.create_task(_deferred(), name=f"{PLUGIN_ID}:app-ready")
 
 
-async def start_background() -> None:
-    """5. 进程级长驻：定期巡检所有在线账号。"""
-    interval = max(60, BACKGROUND_INTERVAL_SEC)
-    while True:
-        await asyncio.sleep(interval)
-        online = await iter_online_clients()
-        if not online:
-            logger.debug(f"[{PLUGIN_ID}] background tick：无在线账号")
-            continue
-        for wxid in online:
-            client = await get_client(wxid)
-            if client is None:
-                continue
-            logger.debug(f"[{PLUGIN_ID}] background tick wxid={wxid} ok")
+# async def start_background() -> None:
+#     """5. 进程级长驻：定期巡检所有在线账号。"""
+#     interval = max(60, BACKGROUND_INTERVAL_SEC)
+#     while True:
+#         await asyncio.sleep(interval)
+#         online = await iter_online_clients()
+#         if not online:
+#             logger.debug(f"[{PLUGIN_ID}] background tick：无在线账号")
+#             continue
+#         for wxid in online:
+#             client = await get_client(wxid)
+#             if client is None:
+#                 continue
+#             logger.debug(f"[{PLUGIN_ID}] background tick wxid={wxid} ok")
             # 示例：取消注释并按需填写 TO_WXID
             # if _filled(TO_WXID):
             #     await client.msg.send_text_message(

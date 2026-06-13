@@ -78,3 +78,48 @@ class AsyncHTTPTransport:
             raise ApiError(api_resp.code, msg)
 
         return api_resp.data  # 类型自动推断为 _T，完美！
+
+    async def post_envelope(
+        self,
+        path: str,
+        json: Optional[dict] = None,
+        *,
+        timeout: Optional[float] = None,
+    ) -> tuple[int, str, Optional[dict]]:
+        """
+        返回 (code, message, data)，不因业务 code != 200 抛异常。
+        供 Relay 等需处理 -2020 / needInit 的流程使用。
+        """
+        headers = {}
+        if self._config.x_wxid:
+            headers["X-Wxid"] = self._config.x_wxid
+
+        url = self._config.api_url(path)
+
+        try:
+            response = await self._client.post(
+                url,
+                json=json,
+                headers=headers,
+                timeout=timeout if timeout is not None else self._config.timeout,
+            )
+        except httpx.TimeoutException:
+            raise HttpError(0, "request timeout")
+        except httpx.NetworkError as e:
+            raise HttpError(0, f"network error: {e}")
+
+        if response.status_code != 200:
+            logger.error(f"HTTP {response.status_code} {url} {response.text[:300]}")
+            raise HttpError(response.status_code, response.text[:500])
+
+        try:
+            raw_json = response.json()
+        except ValueError as e:
+            raise HttpError(response.status_code, f"invalid json: {e}")
+
+        code = int(raw_json.get("code", -1))
+        message = str(raw_json.get("message") or "")
+        data = raw_json.get("data")
+        if data is not None and not isinstance(data, dict):
+            data = None
+        return code, message, data

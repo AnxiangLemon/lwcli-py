@@ -21,6 +21,14 @@ from .utils import logger as root_logger
 EmitFn = Callable[[dict], Awaitable[None]]
 
 
+def normalize_login_mode(mode: str) -> str:
+    """返回 ``local``（本机 MMTLS）或 ``remote``（服务端直连）。"""
+    m = (mode or "").strip().lower()
+    if m in ("local", "relay"):
+        return "local"
+    return "remote"
+
+
 class LoginService:
     """组合 LwApiClient.login 的若干步骤，供 BotService 在单账号协程里调用。"""
 

@@ -33,6 +33,7 @@ from src.plugins.panel import (
 )
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
+from src.login_service import normalize_login_mode
 from src.runtime.account_events import AccountEventHub
 from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
 from src.web.auth import (
@@ -165,11 +166,13 @@ class AdminWebApp:
         if err:
             return web.json_response({"error": err}, status=400)
         remark = (body.get("remark") or "").strip() or device_id[:8]
+        login_mode = normalize_login_mode(body.get("login_mode", "local"))
         acc = {
             "device_id": device_id,
             "wxid": (body.get("wxid") or "").strip(),
             "remark": remark,
             "proxy": body.get("proxy"),
+            "login_mode": login_mode,
         }
         accounts = load_accounts_safe()
         accounts.append(acc)
@@ -205,6 +208,10 @@ class AdminWebApp:
             accounts[idx]["remark"] = str(body.get("remark") or "").strip()
         if "proxy" in body:
             accounts[idx]["proxy"] = body.get("proxy")
+        if "login_mode" in body:
+            accounts[idx]["login_mode"] = normalize_login_mode(
+                body.get("login_mode", "local")
+            )
         save_accounts(accounts)
         return web.json_response({"ok": True})
 
@@ -259,7 +266,9 @@ class AdminWebApp:
         accounts = load_accounts_safe()
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
-        stopped = await self.bot_service.stop_for_account(idx)
+        account = accounts[idx]
+        remark = effective_account_remark(account)
+        stopped = await self.bot_service.stop_for_account(idx, remark=remark)
         return web.json_response({"ok": True, "stopped": stopped})
 
     async def api_start_all(self, request: web.Request) -> web.Response:

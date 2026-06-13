@@ -29,9 +29,9 @@ class ApiError(Exception):
 class LoginError(LwApiError):
     """登录流程异常（扫码、二次登录、运维台 emit 等）。"""
 
-    # 用户主动取消、过期、超时等：Bot 可自动重新拉码，不必打 ERROR 堆栈
+    # 过期、超时等可自动重新拉码；用户主动取消则停止任务，不再刷新二维码
     RECOVERABLE_REASONS = frozenset(
-        {"canceled", "expired", "timeout", "stopped", "login"}
+        {"expired", "timeout", "stopped", "login"}
     )
 
     def __init__(self, message: str, *, reason: str = "") -> None:

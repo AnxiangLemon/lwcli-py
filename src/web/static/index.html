@@ -232,6 +232,23 @@
             <label for="modal-edit-wxid">wxid（可空）</label>
             <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
           </div>
+          <div class="modal-field">
+            <span class="modal-field-label">登录方式</span>
+            <div class="modal-radio-group" role="radiogroup" aria-label="登录方式">
+              <label class="modal-radio">
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-remote" value="remote" />
+                <span class="modal-radio-text">
+                  <strong>远程登录</strong>
+                </span>
+              </label>
+              <label class="modal-radio">
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-local" value="local" checked />
+                <span class="modal-radio-text">
+                  <strong>本地登录</strong>
+                </span>
+              </label>
+            </div>
+          </div>
           <div class="app-modal-actions">
             <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
             <button type="submit" class="btn btn-primary" id="modal-edit-submit">保存</button>
@@ -508,25 +525,140 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
     }
 
     let _lastAccountsPayload = [];
+    const _qrLoginUi = {};
+
+    function rememberQrScanner(index, msg) {
+      const state = _qrLoginUi[index] || (_qrLoginUi[index] = {});
+      const nick = msg.nick_name || msg.nickname || msg.nickName;
+      const avatar = msg.head_img_url || msg.avatar || msg.headImgUrl;
+      if (nick) state.nickName = String(nick);
+      if (avatar) state.headImgUrl = String(avatar);
+      return state;
+    }
+
+    function qrScannerAvatarHtml(avatar) {
+      if (!avatar) return '';
+      return '<img class="qr-scanner-avatar" src="' + esc(avatar) + '" alt="" onerror="this.remove()" />';
+    }
+
+    function renderQrLoginStatus(index, phase, msg) {
+      const st = document.getElementById('status-' + index);
+      if (!st) return;
+      const state = rememberQrScanner(index, msg || {});
+      const nick = state.nickName || '';
+      const avatar = state.headImgUrl || '';
+      const map = {
+        waiting: { cls: 'info', title: '', text: '请使用微信扫描二维码' },
+        scanned: { cls: 'info', title: nick, text: '已扫码，请在手机上点【登录】' },
+        confirming: { cls: 'info', title: nick, text: '正在确认登录…' },
+        canceled: { cls: 'warn', title: nick, text: '已取消登录' },
+        unknown: { cls: 'info', title: '', text: '状态更新' },
+      };
+      const spec = map[phase] || map.unknown;
+      if (avatar || spec.title) {
+        st.innerHTML =
+          '<div class="qr-status-rich qr-status-rich--' + esc(phase) + '">' +
+          qrScannerAvatarHtml(avatar) +
+          '<div class="qr-status-rich-text">' +
+          (spec.title ? '<strong>' + esc(spec.title) + '</strong>' : '') +
+          '<span class="' + esc(spec.cls) + '">' + esc(spec.text) + '</span>' +
+          '</div></div>';
+        return;
+      }
+      st.innerHTML = '<span class="' + esc(spec.cls) + '">' + esc(spec.text) + '</span>';
+    }
+
+    function hideToast() {
+      var el = document.getElementById('toast');
+      if (!el) return;
+      el.classList.remove('is-visible');
+      el.setAttribute('aria-hidden', 'true');
+      clearTimeout(window._lwapiToastTimer);
+    }
+
+    function showToast(msg, variant) {
+      if (variant === true) variant = 'warning';
+      if (variant === false) variant = 'success';
+      variant = variant || 'success';
+      var el = document.getElementById('toast');
+      if (!el) return;
+      var iconHtml = {
+        success:
+          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>',
+        error:
+          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+        warning:
+          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v5M12 17h.01"/><path d="M10.3 3.2h3.4L21 18H3L10.3 3.2z"/></svg>',
+      };
+      el.className = 'toast toast--' + variant;
+      el.innerHTML =
+        '<span class="toast-icon" aria-hidden="true">' +
+        (iconHtml[variant] || iconHtml.success) +
+        '</span>' +
+        '<span class="toast-msg"></span>' +
+        '<button type="button" class="toast-close" aria-label="关闭提示">×</button>';
+      var span = el.querySelector('.toast-msg');
+      if (span) span.textContent = msg;
+      var closeBtn = el.querySelector('.toast-close');
+      if (closeBtn) closeBtn.onclick = function (ev) {
+        ev.stopPropagation();
+        hideToast();
+      };
+      el.onclick = hideToast;
+      el.classList.add('is-visible');
+      el.setAttribute('aria-hidden', 'false');
+      if (variant === 'error') el.setAttribute('role', 'alert');
+      else el.setAttribute('role', 'status');
+      clearTimeout(window._lwapiToastTimer);
+      var ms = variant === 'error' ? 5200 : variant === 'warning' ? 3600 : 2800;
+      window._lwapiToastTimer = setTimeout(hideToast, ms);
+    }
+
+    function notifyError(err, fallback) {
+      var msg = (err && err.message) ? err.message : (fallback || '操作失败');
+      showToast(msg, 'error');
+    }
 
     function ensureAccountWs(index) {
       if (accountWs[index] && accountWs[index].readyState === WebSocket.OPEN) return Promise.resolve();
       return new Promise((resolve, reject) => {
+        let settled = false;
+        const fail = (err) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(err instanceof Error ? err : new Error(String(err || '事件通道连接失败')));
+        };
+        const timer = setTimeout(function () {
+          fail(new Error('事件通道连接超时，请刷新页面后重试'));
+        }, 12000);
         try {
           const ws = new WebSocket(protoWs() + '//' + location.host + '/ws/account/' + index);
           accountWs[index] = ws;
-          ws.onopen = () => resolve();
-          ws.onerror = () => reject(new Error('事件通道连接失败'));
+          ws.onopen = function () {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve();
+          };
+          ws.onerror = function () {
+            fail(new Error('事件通道连接失败，请确认运维台已启动后重试'));
+          };
           ws.onmessage = (ev) => {
             try {
               const msg = JSON.parse(ev.data);
               onAccountEvent(index, msg);
             } catch (e) { console.warn(e); }
           };
-          ws.onclose = () => {
+          ws.onclose = function () {
             if (accountWs[index] === ws) delete accountWs[index];
+            if (!settled) {
+              fail(new Error('事件通道连接失败，请刷新页面后重试'));
+            } else {
+              refreshAccounts({ soft: true });
+            }
           };
-        } catch (e) { reject(e); }
+        } catch (e) { fail(e); }
       });
     }
 
@@ -539,23 +671,35 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         return;
       }
       if (ev === 'qr_ready') {
+        delete _qrLoginUi[index];
+        const qrImage = (msg.qr_image || '').trim();
         const b64 = (msg.qr_base64 || '').replace(/\s/g, '');
         if (panel) {
+          var imgSrc = qrImage || (b64 ? 'data:image/png;base64,' + b64 : '');
           panel.innerHTML =
             '<div class="acc-qr-placeholder">' +
-            '<div class="acc-qr-frame"><img class="qr" alt="微信登录二维码" src="data:image/png;base64,' + b64 + '" onerror="this.style.display=\'none\'" /></div>' +
+            '<div class="acc-qr-frame"><img class="qr" alt="微信登录二维码" src="' + imgSrc + '" onerror="this.style.display=\'none\'" /></div>' +
             '</div>';
         }
-        if (st) st.innerHTML = '<span class="info">请使用微信扫描二维码</span>';
+        renderQrLoginStatus(index, 'waiting', msg);
         return;
       }
       if (ev === 'poll') {
-        if (st) st.textContent = '等待手机确认…';
         return;
       }
       if (ev === 'status') {
-        const map = { waiting: '等待扫码', scanned: '已扫码，请在手机上点登录', confirming: '确认中', canceled: '已取消', unknown: '状态更新' };
-        if (st) st.innerHTML = '<span class="info">' + (map[msg.phase] || msg.phase) + ' <small>(' + msg.raw_status + ')</small></span>';
+        if (msg.phase === 'canceled') {
+          const nick = String(msg.nick_name || msg.nickname || '').trim();
+          clearAccountQrUi(index);
+          setAccountExpanded(index, false);
+          showToast(nick ? nick + ' 已取消登录' : '扫码已取消', 'warning');
+          refreshAccounts({ soft: true });
+          return;
+        }
+        renderQrLoginStatus(index, msg.phase || 'unknown', msg);
+        if (msg.nick_name || msg.head_img_url || msg.nickname || msg.avatar) {
+          refreshAccounts({ soft: true });
+        }
         return;
       }
       if (ev === 'verify_url') {
@@ -581,14 +725,29 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         return;
       }
       if (ev === 'login_interrupted') {
+        if (msg.code === 'canceled') {
+          clearAccountQrUi(index);
+          setAccountExpanded(index, false);
+          refreshAccounts({ soft: true });
+          return;
+        }
+        const state = _qrLoginUi[index] || {};
+        const nick = state.nickName || '';
         const hint = {
-          canceled: '扫码已取消，正在准备新二维码…',
           expired: '二维码已过期，正在刷新…',
           timeout: '扫码超时，正在刷新…',
           stopped: '登录已停止',
         };
         if (st) {
-          st.innerHTML = '<span class="info">' + esc(hint[msg.code] || msg.message || '登录中断，将重试') + '</span>';
+          const text = hint[msg.code] || msg.message || '登录中断，将重试';
+          if (state.headImgUrl) {
+            st.innerHTML =
+              '<div class="qr-status-rich qr-status-rich--interrupted">' +
+              qrScannerAvatarHtml(state.headImgUrl) +
+              '<div class="qr-status-rich-text"><span class="info">' + esc(text) + '</span></div></div>';
+          } else {
+            st.innerHTML = '<span class="info">' + esc(text) + '</span>';
+          }
         }
         return;
       }
@@ -597,15 +756,94 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         return;
       }
       if (ev === 'error') {
+        if (msg.code === 'canceled') {
+          clearAccountQrUi(index);
+          setAccountExpanded(index, false);
+          refreshAccounts({ soft: true });
+          return;
+        }
         if (st) st.innerHTML = '<span class="err">' + esc(msg.message || msg.code || '错误') + '</span>';
         refreshAccounts({ soft: true });
       }
+    }
+
+    function loginModeLabel(mode) {
+      return (mode || 'remote') === 'local' ? '本地登录' : '远程登录';
+    }
+
+    function setModalLoginMode(mode) {
+      var val = (mode || 'remote') === 'local' ? 'local' : 'remote';
+      var el = document.querySelector('input[name="modal-login-mode"][value="' + val + '"]');
+      if (el) el.checked = true;
+    }
+
+    function getModalLoginMode() {
+      var checked = document.querySelector('input[name="modal-login-mode"]:checked');
+      return checked && checked.value === 'local' ? 'local' : 'remote';
     }
 
     function badgeHtml(acc) {
       if (acc.pending_login) return '<span class="badge badge-wait">登录中</span>';
       if (acc.running) return '<span class="badge badge-on">运行中</span>';
       return '<span class="badge badge-off">未运行</span>';
+    }
+
+    function accountCardStateClass(acc) {
+      if (acc.pending_login) return 'account-card--pending';
+      if (acc.running) return 'account-card--running';
+      return 'account-card--idle';
+    }
+
+    function accountAvatarPlaceholderHtml() {
+      return '<span class="acc-avatar-placeholder" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">' +
+        '<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>' +
+        '</svg></span>';
+    }
+
+    function accountAvatarHtml(acc) {
+      const url = (acc.avatar_url || '').trim();
+      const img = url
+        ? '<img class="acc-avatar-img" src="' + esc(url) + '" alt="" onerror="this.remove()" />'
+        : '';
+      return '<div class="acc-avatar" aria-hidden="true">' + img + accountAvatarPlaceholderHtml() + '</div>';
+    }
+
+    function accountTitleHtml(acc) {
+      const remark = esc(acc.remark || '(未备注)');
+      const nick = (acc.nickname || '').trim();
+      if (!nick || nick === (acc.remark || '').trim()) return remark;
+      return remark + ' <span class="acc-nickname">' + esc(nick) + '</span>';
+    }
+
+    function patchAccountCardDom(card, acc, index) {
+      card.classList.remove('account-card--idle', 'account-card--running', 'account-card--pending');
+      card.classList.add(accountCardStateClass(acc));
+      const avatarSlot = card.querySelector('.acc-avatar');
+      if (avatarSlot) avatarSlot.outerHTML = accountAvatarHtml(acc);
+      const titleEl = card.querySelector('.acc-title');
+      if (titleEl) titleEl.innerHTML = accountTitleHtml(acc);
+      const badgeSlot = card.querySelector('.acc-badges');
+      if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
+      const w = card.querySelector('.acc-wxid');
+      if (w) { w.textContent = acc.wxid || '—'; w.title = acc.wxid || ''; }
+      if (!acc.pending_login && !acc.running) {
+        clearAccountQrUi(index);
+      } else if (acc.pending_login && !card.classList.contains('is-expanded')) {
+        setAccountExpanded(index, true);
+      }
+      const running = acc.running;
+      const pending = acc.pending_login;
+      const disableStart = running || pending;
+      const disableMutate = running || pending;
+      const startBtn = card.querySelector('.acc-btn-start');
+      const stopBtn = card.querySelector('.acc-btn-stop');
+      const editBtn = card.querySelector('.acc-btn-edit');
+      const delBtn = card.querySelector('.acc-btn-del');
+      if (startBtn) startBtn.disabled = disableStart;
+      if (stopBtn) stopBtn.disabled = !running && !pending;
+      if (editBtn) editBtn.disabled = disableMutate;
+      if (delBtn) delBtn.disabled = disableMutate;
     }
 
     function softPatchAccounts(data) {
@@ -615,29 +853,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       data.accounts.forEach((acc, index) => {
         const card = document.querySelector('.account-card[data-idx="' + index + '"]');
         if (!card) return;
-        const titleEl = card.querySelector('.acc-title');
-        const badgeSlot = card.querySelector('.acc-badges');
-        if (titleEl) titleEl.textContent = acc.remark || '(未备注)';
-        if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
-        const w = card.querySelector('.acc-wxid');
-        if (w) { w.textContent = acc.wxid || '—'; w.title = acc.wxid || ''; }
-
-        if (acc.pending_login && !card.classList.contains('is-expanded')) {
-          setAccountExpanded(index, true);
-        }
-
-        const running = acc.running;
-        const pending = acc.pending_login;
-        const disableStart = running || pending;
-        const disableMutate = running || pending;
-        const startBtn = card.querySelector('.acc-btn-start');
-        const stopBtn = card.querySelector('.acc-btn-stop');
-        const editBtn = card.querySelector('.acc-btn-edit');
-        const delBtn = card.querySelector('.acc-btn-del');
-        if (startBtn) startBtn.disabled = disableStart;
-        if (stopBtn) stopBtn.disabled = !running && !pending;
-        if (editBtn) editBtn.disabled = disableMutate;
-        if (delBtn) delBtn.disabled = disableMutate;
+        patchAccountCardDom(card, acc, index);
       });
       return true;
     }
@@ -677,16 +893,18 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const disableMutate = running || pending;
       const badge = badgeHtml(acc);
       const wx = acc.wxid || '';
+      const stateCls = accountCardStateClass(acc);
       const isExpanded = pending || expandedAccounts.has(index);
       const expCls = isExpanded ? ' is-expanded' : '';
       const ariaExp = isExpanded ? 'true' : 'false';
       const ariaHid = isExpanded ? 'false' : 'true';
 
       return (
-        '<div class="account-card' + expCls + '" data-idx="' + index + '">' +
+        '<div class="account-card ' + stateCls + expCls + '" data-idx="' + index + '">' +
         '<div class="acc-row" onclick="onAccountRowClick(event,' + index + ')">' +
+        accountAvatarHtml(acc) +
         '<div class="acc-row-head">' +
-        '<h3 class="acc-title">' + esc(acc.remark || '(未备注)') + '</h3>' +
+        '<h3 class="acc-title">' + accountTitleHtml(acc) + '</h3>' +
         '<div class="acc-badges">' + badge + '</div>' +
         '</div>' +
         '<div class="acc-row-meta">' +
@@ -789,7 +1007,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         await fetchJson('/api/accounts/' + index + '/start', { method: 'POST' });
         await refreshAccounts({ soft: true });
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
         if (st) st.innerHTML = '<span class="err">' + esc(e.message) + '</span>';
         await refreshAccounts({ soft: false });
       }
@@ -801,13 +1019,14 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const st = document.getElementById('status-' + index);
       if (panel) panel.innerHTML = '';
       if (st) st.innerHTML = '';
+      delete _qrLoginUi[index];
     }
 
     async function stopBot(index) {
       try {
         await fetchJson('/api/accounts/' + index + '/stop', { method: 'POST' });
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
         return;
       }
       const ws = accountWs[index];
@@ -833,6 +1052,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       document.getElementById('modal-edit-device').value = '';
       document.getElementById('modal-edit-remark').value = '';
       document.getElementById('modal-edit-wxid').value = '';
+      setModalLoginMode('local');
       var submitBtn = document.getElementById('modal-edit-submit');
       if (submitBtn) submitBtn.textContent = '添加';
       openAppModal();
@@ -930,7 +1150,7 @@ function openConfirmModal(opts) {
         var summ = await fetchJson('/api/messages/summary');
         total = summ.total || 0;
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
         return;
       }
       openConfirmModal({
@@ -987,7 +1207,7 @@ function openConfirmModal(opts) {
           await loadMessagesPanel(true);
         }
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
       } finally {
         if (delBtn) delBtn.disabled = false;
       }
@@ -1009,7 +1229,7 @@ function openConfirmModal(opts) {
           var data = await fetchJson('/api/accounts');
           acc = data.accounts[index];
         } catch (e) {
-          alert(e.message);
+          notifyError(e);
           return;
         }
       }
@@ -1028,6 +1248,7 @@ function openConfirmModal(opts) {
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
       document.getElementById('modal-edit-wxid').value = acc.wxid || '';
+      setModalLoginMode(acc.login_mode || 'local');
       openAppModal();
       setTimeout(function () {
         var el = document.getElementById('modal-edit-device');
@@ -1043,6 +1264,7 @@ function openConfirmModal(opts) {
       var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
       var remark = document.getElementById('modal-edit-remark').value.trim();
       var wxid = document.getElementById('modal-edit-wxid').value.trim();
+      var login_mode = getModalLoginMode();
       var didErr = deviceIdValidationError(device_id);
       if (didErr) {
         showToast(didErr, 'warning');
@@ -1055,7 +1277,7 @@ function openConfirmModal(opts) {
       if (btn) btn.disabled = true;
       try {
         if (isAdd) {
-          var body = { device_id: device_id, remark: remark };
+          var body = { device_id: device_id, remark: remark, login_mode: login_mode };
           if (wxid) body.wxid = wxid;
           await fetchJson('/api/accounts', {
             method: 'POST',
@@ -1068,49 +1290,17 @@ function openConfirmModal(opts) {
           await fetchJson('/api/accounts/' + index, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid }),
+            body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid, login_mode: login_mode }),
           });
         }
         closeAppModal();
         await refreshAccounts({ soft: false });
         showToast(isAdd ? '账号已添加' : '已保存', 'success');
       } catch (err) {
-        alert(err.message);
+        notifyError(err);
       } finally {
         if (btn) btn.disabled = false;
       }
-    }
-
-    function showToast(msg, variant) {
-      variant = variant || 'success';
-      var el = document.getElementById('toast');
-      if (!el) return;
-      var iconHtml = {
-        success:
-          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>',
-        error:
-          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
-        warning:
-          '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v5M12 17h.01"/><path d="M10.3 3.2h3.4L21 18H3L10.3 3.2z"/></svg>',
-      };
-      el.className = 'toast toast--' + variant;
-      el.innerHTML =
-        '<span class="toast-icon" aria-hidden="true">' +
-        (iconHtml[variant] || iconHtml.success) +
-        '</span>' +
-        '<span class="toast-msg"></span>';
-      var span = el.querySelector('.toast-msg');
-      if (span) span.textContent = msg;
-      el.classList.add('is-visible');
-      el.setAttribute('aria-hidden', 'false');
-      if (variant === 'error') el.setAttribute('role', 'alert');
-      else el.setAttribute('role', 'status');
-      clearTimeout(window._lwapiToastTimer);
-      var ms = variant === 'error' ? 4500 : variant === 'warning' ? 3200 : 2600;
-      window._lwapiToastTimer = setTimeout(function () {
-        el.classList.remove('is-visible');
-        el.setAttribute('aria-hidden', 'true');
-      }, ms);
     }
 
     function isLwSendBizSuccess(result) {
@@ -1318,7 +1508,7 @@ function openConfirmModal(opts) {
         await persistPlugins();
         showToast('已更新执行顺序');
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
       }
     }
 
@@ -1331,7 +1521,7 @@ function openConfirmModal(opts) {
         await loadPluginsPanel();
         showToast(input.checked ? '启用成功' : '已禁用');
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
         input.checked = revertTo;
       }
     }
@@ -1359,7 +1549,7 @@ function openConfirmModal(opts) {
       });
       var url = p && p.capabilities && p.capabilities.panel_url;
       if (!url) {
-        showToast('该插件未提供设置页', true);
+        showToast('该插件未提供设置页', 'warning');
         return;
       }
       var root = document.getElementById('plugin-settings-modal');
@@ -1767,7 +1957,7 @@ function openConfirmModal(opts) {
         await loadMessagesListRows();
         updateMsgComposePanel();
       } catch (e) {
-        alert(e.message);
+        notifyError(e);
       }
     }
 
