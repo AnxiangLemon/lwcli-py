@@ -71,4 +71,7 @@ class BizCompleteRequest(BaseModelWithConfig):
 class BizCompleteData(BaseModelWithConfig):
     sessionId: str = ""
     flow: str = ""
+    needInit: bool = False
+    needInitReason: Optional[str] = None
+    mmtlsHost: Optional[str] = None
     result: Dict[str, Any] = Field(default_factory=dict)

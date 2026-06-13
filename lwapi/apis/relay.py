@@ -236,7 +236,8 @@ class RelayClient:
         flow: str,
         status_code: int,
         body_hex: str,
-    ) -> BizCompleteData:
+    ) -> tuple[int, str, BizCompleteData]:
+        """返回 (code, message, data)；-2020/needInit 不在此抛错，由 biz_round 重试 Init。"""
         if not self._session_id:
             raise LoginError("缺少 Relay sessionId")
         req = BizCompleteRequest(
@@ -252,12 +253,12 @@ class RelayClient:
         if code == -1019:
             self._session_id = ""
             raise LoginError(message or "Relay 会话已过期", reason="expired")
-        if code != 200 or not data:
+        if not data:
             raise ApiError(code, message or "Biz/Complete 失败")
         done = BizCompleteData.model_validate(data)
         if done.sessionId:
             self._session_id = done.sessionId
-        return done
+        return code, message, done
 
     async def biz_round(
         self,
@@ -267,17 +268,24 @@ class RelayClient:
         os_type: int = 0,
         proxy: Optional[RelayProxyInfo] = None,
         wxid: Optional[str] = None,
-        max_init_retry: int = 1,
+        max_init_retry: int = 2,
     ) -> Dict[str, Any]:
         """
         Biz/Prepare → [POST 微信] → Biz/Complete，返回 result 字典。
-        遇 -2020 / needInit 时自动 ensure_init 后重试。
+        Prepare 或 Complete 遇 -2020 / needInit 时自动 ensure_init 后重试整条 flow。
+        （sec_manual_auth 常见 -301 host_redirect，Complete 阶段也会触发 needInit）
         """
         for attempt in range(max_init_retry + 1):
             code, message, prep = await self._biz_prepare(flow, wxid=wxid)
             if code == -2020 or prep.needInit:
                 if attempt >= max_init_retry:
                     raise LoginError(message or "需要先完成 MMTLS 握手")
+                logger.info(
+                    "Relay Biz/Prepare needInit flow={} attempt={}/{}",
+                    flow,
+                    attempt + 1,
+                    max_init_retry + 1,
+                )
                 await self.ensure_init(
                     device_id,
                     os_type=os_type,
@@ -300,7 +308,30 @@ class RelayClient:
                 raise LoginError(f"Biz/Prepare({flow}) 未返回 http 规格")
 
             status, raw = await self.post_wechat(prep.http)
-            done = await self._biz_complete(flow, status, _to_hex(raw))
+            c_code, c_msg, done = await self._biz_complete(flow, status, _to_hex(raw))
+            if c_code == -2020 or done.needInit:
+                reason = done.needInitReason or "unknown"
+                host = done.mmtlsHost or ""
+                if attempt >= max_init_retry:
+                    raise LoginError(
+                        c_msg or f"需要先完成 MMTLS 握手 ({reason})"
+                    )
+                logger.info(
+                    "Relay Biz/Complete needInit flow={} reason={} mmtlsHost={} attempt={}/{}",
+                    flow,
+                    reason,
+                    host,
+                    attempt + 1,
+                    max_init_retry + 1,
+                )
+                await self.ensure_init(
+                    device_id,
+                    os_type=os_type,
+                    proxy=proxy,
+                )
+                continue
+            if c_code != 200:
+                raise ApiError(c_code, c_msg or "Biz/Complete 失败")
             return dict(done.result or {})
 
         raise LoginError(f"Biz({flow}) 重试次数已用尽")
@@ -479,6 +510,7 @@ class RelayClient:
             device_id=device_id,
             os_type=os_type,
             proxy=proxy,
+            max_init_retry=3,
         )
         if auth.get("type") == "login_ok":
             yield {
