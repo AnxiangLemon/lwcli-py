@@ -1,0 +1,28 @@
+syntax = "proto2";
+
+package wechat;
+
+message SKBuiltinString_t {
+  optional string string = 1;
+}
+
+message SKBuiltinBuffer_t {
+  required uint32 iLen = 1;
+  optional bytes buffer = 2;
+}
+
+message AddMsg {
+  required int32 msgId = 1;
+  required SKBuiltinString_t fromUserName = 2;
+  required SKBuiltinString_t toUserName = 3;
+  required int32 msgType = 4;
+  required SKBuiltinString_t content = 5;
+  required uint32 status = 6;
+  required uint32 imgStatus = 7;
+  required SKBuiltinBuffer_t imgBuf = 8;
+  required uint32 createTime = 9;
+  optional string msgSource = 10;
+  optional string pushContent = 11;
+  optional int64 newMsgId = 12;
+  optional uint32 msgSeq = 13;
+}

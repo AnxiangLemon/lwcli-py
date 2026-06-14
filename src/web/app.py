@@ -20,6 +20,7 @@ from src.account_loader import load_accounts_safe, save_accounts
 from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import clear_inbox, query_list, query_summary
 from src.plugins.lifecycle import plugin_background_lifespan
+from src.events_lifespan import events_ws_background_lifespan
 from src.plugins.config import (
     is_secret_placeholder,
     load_plugin_settings,
@@ -61,6 +62,7 @@ class AdminWebApp:
     def build(self) -> web.Application:
         app = web.Application(middlewares=[auth_middleware])
         app.cleanup_ctx.append(plugin_background_lifespan)
+        app.cleanup_ctx.append(events_ws_background_lifespan)
         app.add_routes(
             [
                 web.static("/static", str(STATIC_DIR)),

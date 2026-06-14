@@ -17,6 +17,7 @@ dependencies = [
     "aiohttp",
     "httpx",
     "tzdata",
+    "protobuf>=4.0",
 ]
 
 [build-system]

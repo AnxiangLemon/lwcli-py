@@ -6,3 +6,4 @@ python-dotenv
 aiohttp
 httpx
 tzdata
+protobuf>=4.0
