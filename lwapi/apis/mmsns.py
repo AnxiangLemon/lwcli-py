@@ -34,7 +34,7 @@ class MmSnsClient:
     ) -> Any:
         """点赞或评论朋友圈。"""
         return await self._t.post(
-            "/MmSns/Comment",
+            "/Mmsns/Comment",
             json=SnsCommentParam(
                 id=sns_id,
                 op_type=op_type,
@@ -54,7 +54,7 @@ class MmSnsClient:
     ) -> Any:
         """获取指定用户朋友圈列表页。"""
         return await self._t.post(
-            "/MmSns/GetDetail",
+            "/Mmsns/GetDetail",
             json=SnsGetDetailParam(
                 towxid=towxid, maxid=maxid, fristpagemd5=fristpagemd5
             ).to_api(),
@@ -66,7 +66,7 @@ class MmSnsClient:
     ) -> Any:
         """获取单条朋友圈详情。"""
         return await self._t.post(
-            "/MmSns/GetIdDetail",
+            "/Mmsns/GetIDDetail",
             json=SnsGetIdDetailParam(towxid=towxid, id=sns_id).to_api(),
             timeout=timeout,
         )
@@ -76,7 +76,7 @@ class MmSnsClient:
     ) -> Any:
         """获取自己朋友圈首页列表。"""
         return await self._t.post(
-            "/MmSns/GetList",
+            "/Mmsns/GetList",
             json=SnsGetListParam(maxid=maxid, fristpagemd5=fristpagemd5).to_api(),
             timeout=timeout,
         )
@@ -91,7 +91,7 @@ class MmSnsClient:
     ) -> Any:
         """发布朋友圈（content 为 XML）。"""
         return await self._t.post(
-            "/MmSns/MmSnsPost",
+            "/Mmsns/MmSnsPost",
             json=SnsPostParam(
                 content=content,
                 black_list=black_list,
@@ -105,7 +105,7 @@ class MmSnsClient:
     ) -> Any:
         """同步朋友圈。"""
         return await self._t.post(
-            "/MmSns/MmSnsSync", json=SnsSyncParam(synckey=synckey).to_api(), timeout=timeout
+            "/Mmsns/MmSnsSync", json=SnsSyncParam(synckey=synckey).to_api(), timeout=timeout
         )
 
     async def operation(
@@ -118,7 +118,7 @@ class MmSnsClient:
     ) -> Any:
         """删除 / 隐私 / 删评论等操作。"""
         return await self._t.post(
-            "/MmSns/Operation",
+            "/Mmsns/Operation",
             json=SnsOperationParam(id=sns_id, op_type=op_type, commnet_id=commnet_id).to_api(),
             timeout=timeout,
         )
@@ -128,7 +128,7 @@ class MmSnsClient:
     ) -> Any:
         """朋友圈权限设置。"""
         return await self._t.post(
-            "/MmSns/PrivacySettings",
+            "/Mmsns/PrivacySettings",
             json=SnsPrivacySettingsParam(feature_code=feature_code, value=value).to_api(),
             timeout=timeout,
         )
@@ -136,5 +136,5 @@ class MmSnsClient:
     async def upload(self, image_b64: str, *, timeout: Optional[float] = None) -> Any:
         """上传朋友圈图片/视频素材（Base64）。"""
         return await self._t.post(
-            "/MmSns/Upload", json=SnsUploadParam(image_b64=image_b64).to_api(), timeout=timeout
+            "/Mmsns/Upload", json=SnsUploadParam(image_b64=image_b64).to_api(), timeout=timeout
         )

@@ -90,7 +90,7 @@ class OfficialClient:
     ) -> Any:
         """OAuth 授权页信息。"""
         return await self._t.post(
-            "/Official/OauthAuthorize",
+            "/Official/OAuthAuthorize",
             json=OfficialGetkeyParam(appid=appid, url=url).to_api(),
             timeout=timeout,
         )

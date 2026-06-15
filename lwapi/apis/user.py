@@ -8,6 +8,7 @@ from typing import Any, Optional
 from ..models.user_requests import (
     UserGetQRCodeParam,
     UserGetUserAuthListParam,
+    UserInitContactParam,
     UserWxaAppIdParam,
 )
 from ..transport import AsyncHTTPTransport
@@ -20,6 +21,23 @@ class UserClient:
     async def get_contact_profile(self, *, timeout: Optional[float] = None) -> Any:
         """获取当前账号联系人资料摘要。"""
         return await self._t.post("/User/GetContactProfile", json=None, timeout=timeout)
+
+    async def init_contact(
+        self,
+        current_wxcontact_seq: int = 0,
+        current_chat_room_contact_seq: int = 0,
+        *,
+        timeout: Optional[float] = None,
+    ) -> Any:
+        """初始化联系人。"""
+        return await self._t.post(
+            "/User/InitContact",
+            json=UserInitContactParam(
+                current_wxcontact_seq=current_wxcontact_seq,
+                current_chat_room_contact_seq=current_chat_room_contact_seq,
+            ).to_api(),
+            timeout=timeout,
+        )
 
     async def get_qrcode(self, style: int = 8, *, timeout: Optional[float] = None) -> Any:
         """获取个人二维码。"""

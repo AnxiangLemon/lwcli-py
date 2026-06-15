@@ -9,7 +9,7 @@ import aiohttp
 from loguru import logger
 
 from lwapi.events_parser import parse_ws_envelope
-from lwapi.events_utils import EventsConfig, build_events_ws_url, load_events_config
+from lwapi.events_utils import EventsConfig, build_events_ws_url, events_ws_enabled, load_events_config
 from lwapi.models.msg import AddMsg
 
 EventHandler = Callable[[AddMsg, dict], Awaitable[None]]
@@ -50,14 +50,19 @@ class EventsWsClient:
         return load_events_config()
 
     async def start(self, handler: EventHandler | None = None) -> None:
-        """启动后台 WebSocket 监听；未配置 EVENT_WS/EVENT_KEY 时静默跳过。"""
+        """启动后台 WebSocket 监听；未开启或未配置 EVENT_WS/EVENT_KEY 时静默跳过。"""
         if self._task and not self._task.done():
             logger.warning("Events WS 已启动，请勿重复启动")
             return
 
         config = self._resolve_config()
         if config is None:
-            logger.info("未配置 EVENT_WS / EVENT_KEY，跳过 Events WS 启动")
+            if self._ws_url and self._event_key:
+                logger.warning("Events WS 配置无效，跳过启动")
+            elif not events_ws_enabled():
+                logger.info("EVENT_WS_ENABLED 未开启，跳过 Events WS 启动")
+            else:
+                logger.info("未配置 EVENT_WS / EVENT_KEY，跳过 Events WS 启动")
             return
 
         self._handler = handler or _default_event_handler

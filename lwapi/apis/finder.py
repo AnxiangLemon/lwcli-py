@@ -12,6 +12,15 @@ class FinderClient:
     def __init__(self, transport: AsyncHTTPTransport) -> None:
         self._t = transport
 
+    async def new_user_prepare(
+        self, wxid: str = "", *, timeout: Optional[float] = None
+    ) -> Any:
+        """视频号用户中心预加载。"""
+        params = {"wxid": wxid} if wxid else None
+        return await self._t.post(
+            "/Finder/NewUserPrepare", json=None, params=params, timeout=timeout
+        )
+
     async def user_prepare(self, wxid: str, *, timeout: Optional[float] = None) -> Any:
         """视频号用户准备（query 携带 wxid）。"""
         return await self._t.post(

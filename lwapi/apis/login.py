@@ -2,7 +2,7 @@
 import asyncio
 import time
 from enum import IntEnum
-from typing import Optional, Dict, Any, Tuple, AsyncIterator, Callable, Awaitable
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Tuple
 
 from httpx import ConnectError, NetworkError, TimeoutException
 from loguru import logger
@@ -246,7 +246,7 @@ class LoginClient:
     ) -> QRGetResponse:
         """获取登录二维码"""
         payload = QRGetRequest(deviceId=device_id, proxy=proxy)
-        data = await self.t.post("/Login/QRGet", json=payload.model_dump())
+        data = await self.t.post("/Login/GetQRCode", json=payload.model_dump())
         return QRGetResponse.model_validate(data)
 
     async def stream_qr_status(
@@ -263,7 +263,7 @@ class LoginClient:
         """
 
         async def _fetch() -> dict:
-            return  await self.t.post(f"/Login/QRCheck?uuid={uuid}")
+            return await self.t.post("/Login/CheckQRCode", params={"uuid": uuid})
 
         async for ev in _iter_qr_poll(
             _fetch,
@@ -416,8 +416,20 @@ class LoginClient:
     async def logout(self) -> bool:
         """退出登录并停止缓存刷新等后台任务。"""
         await self.join_background_tasks()
-        await self.t.post("/Login/LogOut")
+        await self.t.post("/Login/Logout")
         return True
+
+    async def a2_auth(self) -> Any:
+        """刷新 client/server session key。"""
+        return await self.t.post("/Login/A2Auth")
+
+    async def get_online_info(self) -> Any:
+        """查询当前账号的在线登录设备列表。"""
+        return await self.t.post("/Login/GetOnlineInfo")
+
+    async def heartbeat(self) -> Any:
+        """发送心跳包以保持登录会话活跃。"""
+        return await self.t.post("/Login/Heartbeat")
 
     async def sec_auto_login(self) -> bool:
         try:

@@ -12,8 +12,18 @@ class EventsConfig:
     event_key: str
 
 
+_ENABLED_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def events_ws_enabled() -> bool:
+    """是否开启 Events WS hook 消息接收（环境变量 EVENT_WS_ENABLED）。"""
+    return (os.environ.get("EVENT_WS_ENABLED") or "").strip().lower() in _ENABLED_TRUTHY
+
+
 def load_events_config() -> EventsConfig | None:
-    """从环境变量读取 EVENT_WS / EVENT_KEY；任一缺失则返回 None。"""
+    """从环境变量读取 EVENT_WS / EVENT_KEY；未开启或任一缺失则返回 None。"""
+    if not events_ws_enabled():
+        return None
     ws_url = (os.environ.get("EVENT_WS") or "").strip()
     event_key = (os.environ.get("EVENT_KEY") or "").strip()
     if not ws_url or not event_key:

@@ -273,7 +273,7 @@ class RelayClient:
         """
         Biz/Prepare → [POST 微信] → Biz/Complete，返回 result 字典。
         Prepare 或 Complete 遇 -2020 / needInit 时自动 ensure_init 后重试整条 flow。
-        （sec_manual_auth 常见 -301 host_redirect，Complete 阶段也会触发 needInit）
+        Complete result 遇 ret=-301（host_redirect 换机房）时同样 Init 后重试。
         """
         for attempt in range(max_init_retry + 1):
             code, message, prep = await self._biz_prepare(flow, wxid=wxid)
@@ -332,7 +332,25 @@ class RelayClient:
                 continue
             if c_code != 200:
                 raise ApiError(c_code, c_msg or "Biz/Complete 失败")
-            return dict(done.result or {})
+            result = dict(done.result or {})
+            if result.get("type") == "error" and int(result.get("ret", 0) or 0) == -301:
+                if attempt >= max_init_retry:
+                    raise LoginError(
+                        c_msg or result.get("msg") or "host_redirect 重试次数已用尽"
+                    )
+                logger.info(
+                    "Relay Biz/Complete host_redirect flow={} ret=-301 attempt={}/{}",
+                    flow,
+                    attempt + 1,
+                    max_init_retry + 1,
+                )
+                await self.ensure_init(
+                    device_id,
+                    os_type=os_type,
+                    proxy=proxy,
+                )
+                continue
+            return result
 
         raise LoginError(f"Biz({flow}) 重试次数已用尽")
 
