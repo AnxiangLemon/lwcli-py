@@ -170,11 +170,11 @@ class MsgClient:
                             msg = await ws.receive()
                         except asyncio.TimeoutError:
                             logger.warning(
-                                f"WebSocket 读超时（>{_WS_SOCK_READ_TIMEOUT_SEC}s 无数据），将重连"
+                                f"WebSocket 读超时（>{_WS_SOCK_READ_TIMEOUT_SEC}s 无数据），将重连 (wxid={wxid})"
                             )
                             break
                         except aiohttp.ClientError as e:
-                            logger.warning(f"WebSocket 读取异常: {e}，将重连")
+                            logger.warning(f"WebSocket 读取异常: {e}，将重连 (wxid={wxid})")
                             break
 
                         if msg.type == aiohttp.WSMsgType.TEXT:
@@ -188,23 +188,23 @@ class MsgClient:
                         elif msg.type == aiohttp.WSMsgType.CLOSE:
                             code = msg.data
                             extra = f", code={code}" if code is not None else ""
-                            logger.warning(f"WebSocket 收到关闭帧{extra}，将重连")
+                            logger.warning(f"WebSocket 收到关闭帧{extra}，将重连 (wxid={wxid})")
                             break
                         elif msg.type == aiohttp.WSMsgType.CLOSED:
                             exc = ws.exception()
                             detail = f": {exc}" if exc else ""
-                            logger.warning(f"WebSocket 连接已关闭{detail}，将重连")
+                            logger.warning(f"WebSocket 连接已关闭{detail}，将重连 (wxid={wxid})")
                             break
                         elif msg.type == aiohttp.WSMsgType.ERROR:
                             exc = ws.exception()
                             detail = f": {exc}" if exc else ""
-                            logger.warning(f"WebSocket 连接错误{detail}，将重连")
+                            logger.warning(f"WebSocket 连接错误{detail}，将重连 (wxid={wxid})")
                             break
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 if not self._stop_event.is_set():
-                    logger.warning(f"WebSocket 连接异常: {e}，将重连")
+                    logger.warning(f"WebSocket 连接异常: {e}，将重连 (wxid={wxid})")
             finally:
                 if session is not None and not session.closed:
                     await session.close()
