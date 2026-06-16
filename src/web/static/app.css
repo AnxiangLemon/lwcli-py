@@ -48,9 +48,12 @@
   --danger-soft: rgba(240, 98, 142, 0.14);
   --info: var(--aurora-cyan);
 
-  --radius: 18px;
-  --radius-sm: 12px;
-  --radius-lg: 24px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --radius-btn: 8px;
+  --radius-input: 8px;
+  --radius-chip: 6px;
   --radius-pill: 999px;
   --shadow-card: 0 14px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(123, 140, 248, 0.06);
   --shadow-glow: 0 0 70px rgba(123, 140, 248, 0.08);
@@ -543,7 +546,7 @@ html.theme-light .nav-link:not(.is-active) { color: var(--muted); }
   gap: 8px;
   width: 100%;
   padding: 10px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-strong);
   background: var(--star-soft);
   color: var(--text);
@@ -572,7 +575,7 @@ html.theme-light .nav-link:not(.is-active) { color: var(--muted); }
   font-size: 0.76rem;
   color: var(--muted);
   text-decoration: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-btn);
   transition: all 0.18s;
 }
 
@@ -728,7 +731,7 @@ html.theme-light .card h2 { color: var(--moon-deep); }
   background: var(--surface);
   color: var(--text);
   padding: 9px 20px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-btn);
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 600;
@@ -887,7 +890,7 @@ html.theme-light .card h2::before {
 .log-select {
   min-width: 240px;
   padding: 10px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-input);
   background: rgba(8, 8, 18, 0.62);
   border: 1px solid var(--border);
   color: var(--text);
@@ -929,7 +932,7 @@ html.theme-light .log-select {
   width: 100%;
   min-height: 40px;
   padding: 9px 14px 9px 16px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-input);
   background: rgba(8, 8, 18, 0.62);
   border: 1px solid var(--border);
   color: var(--text);
@@ -1264,7 +1267,7 @@ html.theme-light .acc-avatar-placeholder {
   font-size: 0.68rem;
   font-weight: 700;
   padding: 5px 12px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   letter-spacing: 0.04em;
   position: relative;
 }
@@ -1355,7 +1358,7 @@ html.theme-light .badge-refresh-json {
   font-weight: 600;
   color: rgba(94, 234, 212, 0.92);
   padding: 4px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   border: 1px solid rgba(94, 234, 212, 0.28);
   background: rgba(94, 234, 212, 0.08);
   white-space: nowrap;
@@ -1649,7 +1652,7 @@ html.theme-light .acc-qr-shell {
   align-items: center;
   gap: 8px;
   padding: 4px 12px 4px 4px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   border: 1px solid rgba(94, 234, 212, 0.28);
   background: rgba(22, 22, 36, 0.70);
   font-size: 0.8125rem;
@@ -1909,7 +1912,7 @@ html.theme-light .plugin-card-rail-num {
   color: var(--moon);
   background: rgba(8, 8, 18, 0.74);
   padding: 5px 12px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   border: 1px solid rgba(94, 234, 212, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.18);
   word-break: break-all;
@@ -1945,7 +1948,7 @@ html.theme-light .plugin-card-plugin-id:hover {
   font-size: 0.68rem;
   font-weight: 700;
   padding: 5px 11px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   letter-spacing: 0.04em;
 }
 
@@ -2006,7 +2009,7 @@ html.theme-light .plugin-card-ver {
   font-weight: 700;
   color: var(--star);
   padding: 4px 11px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   background: var(--star-soft);
   border: 1px solid rgba(123, 140, 248, 0.3);
 }
@@ -2423,7 +2426,7 @@ html.theme-light .plugin-settings-modal .app-modal-panel.plugin-settings-modal-p
   align-items: flex-start;
   gap: 10px;
   padding: 11px 13px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-input);
   border: 1px solid var(--border);
   background: rgba(8, 8, 18, 0.42);
   cursor: pointer;
@@ -2469,7 +2472,7 @@ html.theme-light .modal-field-label { color: var(--star-deep); }
 .modal-input {
   width: 100%;
   padding: 11px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-input);
   border: 1px solid var(--border);
   background: rgba(8, 8, 18, 0.62);
   color: var(--text);
@@ -2808,7 +2811,7 @@ html.theme-light .msg-td-mono { color: var(--moon-deep); }
   flex: 1;
   max-width: 280px;
   padding: 10px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-input);
   border: 1px solid var(--border);
   background: rgba(8, 8, 18, 0.62);
   color: var(--text);
@@ -2876,7 +2879,7 @@ html.theme-light .msg-compose-label { color: var(--star-deep); }
   gap: 6px;
   max-width: 100%;
   padding: 4px 10px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   border: 1px solid var(--border);
   background: rgba(8, 8, 18, 0.54);
   font-size: 0.72rem;
@@ -3131,7 +3134,7 @@ html.theme-light .login-field-label { color: var(--star-deep); }
 .login-input-wrap input {
   width: 100%;
   padding: 14px 14px 14px 46px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-input);
   border: 1px solid var(--border-strong);
   background: rgba(8, 8, 18, 0.54);
   color: var(--text);
