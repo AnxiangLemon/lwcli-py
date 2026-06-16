@@ -975,13 +975,12 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
 
     function jsonImportBadgeClass(acc) {
       if (!jsonSessionComplete(acc)) return 'badge-refresh-json';
-      if (acc.import_connected) return 'badge-on';
+      if (acc.import_connected && acc.running) return 'badge-on';
       return 'badge-imported';
     }
 
     function badgeHtml(acc) {
       if (acc.pending_login) return '<span class="badge badge-wait">登录中</span>';
-      if (acc.running) return '<span class="badge badge-on">运行中</span>';
       if (isJsonLoginMode(acc)) {
         if (!jsonSessionComplete(acc)) {
           return '<span class="badge badge-refresh-json">' + esc(NEED_REFRESH_JSON_HINT) + '</span>';
@@ -989,6 +988,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         var label = accountPidBadgeText(acc);
         return '<span class="badge ' + jsonImportBadgeClass(acc) + '" title="' + esc(label) + '">' + esc(label) + '</span>';
       }
+      if (acc.running) return '<span class="badge badge-on">运行中</span>';
       return '<span class="badge badge-off">未运行</span>';
     }
 
@@ -1025,6 +1025,36 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       return '<span class="acc-wxid" title="' + esc(wx) + '">' + esc(wx || '—') + '</span>';
     }
 
+    function accountStartLabel(acc) {
+      return '启动';
+    }
+
+    function accountStartLoadingLabel(acc) {
+      return '启动中…';
+    }
+
+    function accountStartBtnHtml(acc, index) {
+      const running = acc.running;
+      const pending = acc.pending_login;
+      const disabled = running || pending;
+      return '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
+        (disabled ? ' disabled' : '') + ' onclick="accountStart(' + index + ')">' +
+        esc(accountStartLabel(acc)) + '</button>';
+    }
+
+    function accountStopDisabled(acc) {
+      return !acc.running && !acc.pending_login;
+    }
+
+    async function accountStart(index) {
+      const acc = (_lastAccountsPayload && _lastAccountsPayload[index]) || null;
+      if (acc && isJsonLoginMode(acc)) {
+        await testImportConnection(index);
+        return;
+      }
+      await startBot(index);
+    }
+
     function patchAccountCardDom(card, acc, index) {
       card.classList.remove('account-card--idle', 'account-card--running', 'account-card--pending');
       card.classList.add(accountCardStateClass(acc));
@@ -1049,20 +1079,13 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const editBtn = card.querySelector('.acc-btn-edit');
       const delBtn = card.querySelector('.acc-btn-del');
       if (startBtn) {
-        if (isJsonLoginMode(acc)) {
-          startBtn.hidden = true;
-        } else {
-          startBtn.hidden = false;
-          startBtn.disabled = disableStart;
-        }
+        startBtn.hidden = false;
+        startBtn.disabled = disableStart;
+        startBtn.textContent = accountStartLabel(acc);
       }
       if (stopBtn) {
-        if (isJsonLoginMode(acc)) {
-          stopBtn.hidden = true;
-        } else {
-          stopBtn.hidden = false;
-          stopBtn.disabled = !running && !pending;
-        }
+        stopBtn.hidden = false;
+        stopBtn.disabled = accountStopDisabled(acc);
       }
       if (editBtn) editBtn.disabled = disableMutate;
       if (delBtn) delBtn.disabled = disableMutate;
@@ -1093,25 +1116,15 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
     function buildAccountRow(acc, index) {
       const running = acc.running;
       const pending = acc.pending_login;
-      const isJson = isJsonLoginMode(acc);
-      const disableStart = running || pending;
       const disableMutate = running || pending;
       const badge = badgeHtml(acc);
       const stateCls = accountCardStateClass(acc);
       const isExpanded = !!pending;
       const expCls = isExpanded ? ' is-expanded' : '';
       const ariaHid = isExpanded ? 'false' : 'true';
-      const startBtnHtml = isJson
-        ? ''
-        : '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
-          (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>';
-      const stopBtnHtml = isJson
-        ? ''
-        : '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
-          (!running && !pending ? ' disabled' : '') + '>停止</button>';
-      const testBtnHtml = isJson
-        ? '<button type="button" class="btn btn-primary acc-btn-import-test" data-import-test="' + index + '" onclick="testImportConnection(' + index + ')">测试连接</button>'
-        : '';
+      const startBtnHtml = accountStartBtnHtml(acc, index);
+      const stopBtnHtml = '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
+        (accountStopDisabled(acc) ? ' disabled' : '') + '>停止</button>';
 
       return (
         '<div class="account-card ' + stateCls + expCls + '" data-idx="' + index + '">' +
@@ -1127,7 +1140,6 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         '<div class="actions acc-actions">' +
         startBtnHtml +
         stopBtnHtml +
-        testBtnHtml +
         '<button type="button" class="btn btn-ghost acc-btn-edit" data-edit="' + index + '" onclick="editAccount(' + index + ')"' +
         (disableMutate ? ' disabled' : '') + '>编辑</button>' +
         '<button type="button" class="btn btn-danger acc-btn-del" data-del="' + index + '" onclick="deleteAccount(' + index + ')"' +
@@ -1281,10 +1293,11 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
     }
 
     async function testImportConnection(index) {
-      var btn = document.querySelector('.acc-btn-import-test[data-import-test="' + index + '"]');
+      var acc = (_lastAccountsPayload && _lastAccountsPayload[index]) || null;
+      var btn = document.querySelector('.acc-btn-start[data-start="' + index + '"]');
       if (btn) {
         btn.disabled = true;
-        btn.textContent = '测试中…';
+        btn.textContent = accountStartLoadingLabel(acc || {});
       }
       var needRefresh = false;
       try {
@@ -1327,7 +1340,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.textContent = '测试连接';
+          btn.textContent = accountStartLabel(acc || (_lastAccountsPayload && _lastAccountsPayload[index]) || {});
         }
         if (needRefresh) await refreshAccounts({ soft: true });
       }

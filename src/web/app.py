@@ -13,8 +13,6 @@ import os
 from pathlib import Path
 
 from aiohttp import web, WSMsgType
-
-from lwapi import LwApiClient
 from lwapi.exceptions import ApiError, HttpError
 
 from src.app_paths import static_dir
@@ -43,17 +41,12 @@ from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
 from src.login_service import (
     NEED_REFRESH_JSON_HINT,
-    apply_import_user_profile,
-    build_import_user_payload,
-    clear_session_import_fields,
     extract_session_import_fields,
-    format_import_user_error,
     normalize_login_mode,
-    parse_import_user_profile,
     validate_import_user_account,
 )
 from src.runtime.account_events import AccountEventHub
-from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
+from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE, JsonImportError
 from src.web.auth import (
     api_auth_login,
     api_auth_logout,
@@ -317,10 +310,10 @@ class AdminWebApp:
             return web.json_response({"error": "账号不存在"}, status=404)
         account = accounts[idx]
         if normalize_login_mode(account.get("login_mode", "local")) == "json":
-            return web.json_response(
-                {"error": "JSON 导入账号无需启动，会话上报功能尚未接入"},
-                status=400,
+            await self.bot_service.start_json_one(
+                account, accounts, idx, wait_ready=False
             )
+            return web.json_response({"ok": True})
         await self.bot_service.start_one(account, accounts, idx)
         return web.json_response({"ok": True})
 
@@ -336,71 +329,42 @@ class AdminWebApp:
         if missing:
             return web.json_response({"error": NEED_REFRESH_JSON_HINT}, status=400)
         try:
-            payload = build_import_user_payload(account)
-        except ValueError as e:
-            return web.json_response({"error": str(e)}, status=400)
-        base_url = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
-        try:
-            async with LwApiClient(base_url) as client:
-                data = await client.login.import_user(payload)
-        except ApiError as e:
-            err_msg = format_import_user_error(e.message or "ImportUser 失败")
-            session_cleared = clear_session_import_fields(account)
-            if session_cleared:
+            result = await self.bot_service.start_json_one(
+                account, accounts, idx, wait_ready=True
+            )
+        except JsonImportError as e:
+            if e.session_cleared:
                 save_accounts(accounts)
+            await self.bot_service.stop_for_account(idx)
             logger.warning(
-                "ImportUser 业务失败 idx={} wxid={} code={} msg={} session_cleared={}",
+                "ImportUser 失败 idx={} wxid={} code={} msg={} session_cleared={}",
                 idx,
                 account.get("wxid"),
                 e.code,
                 e.message,
-                session_cleared,
+                e.session_cleared,
             )
             return web.json_response(
                 {
-                    "error": err_msg,
+                    "error": e.message,
                     "code": e.code,
-                    "session_cleared": session_cleared,
+                    "session_cleared": e.session_cleared,
                 },
                 status=502,
             )
-        except HttpError as e:
-            err_msg = format_import_user_error(e.message or "请求 LwApi 失败")
-            logger.warning(
-                "ImportUser 请求失败 idx={} wxid={} status={} msg={}",
-                idx,
-                account.get("wxid"),
-                e.status_code,
-                e.message,
-            )
-            return web.json_response(
-                {"error": err_msg, "code": e.status_code},
-                status=502,
-            )
         logger.info(
-            "ImportUser 响应 idx={} wxid={} data={}",
+            "ImportUser 成功并已上线 idx={} wxid={} profile_updated={}",
             idx,
             account.get("wxid"),
-            json.dumps(data, ensure_ascii=False, default=str),
+            result.get("profile_updated"),
         )
-        profile_updated = apply_import_user_profile(account, data)
-        account["import_connected"] = True
-        save_accounts(accounts)
-        if profile_updated:
-            logger.info(
-                "ImportUser 已更新资料 idx={} nickname={} avatar_url={}",
-                idx,
-                account.get("nickname"),
-                account.get("avatar_url"),
-            )
-        nickname, avatar_url = parse_import_user_profile(data)
         return web.json_response(
             {
                 "ok": True,
-                "data": data,
-                "nickname": account.get("nickname") or nickname,
-                "avatar_url": account.get("avatar_url") or avatar_url,
-                "profile_updated": profile_updated,
+                "data": result.get("data"),
+                "nickname": result.get("nickname"),
+                "avatar_url": result.get("avatar_url"),
+                "profile_updated": result.get("profile_updated"),
             }
         )
 

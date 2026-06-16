@@ -1410,6 +1410,22 @@ html.theme-light .acc-row-meta .acc-wxid {
 
 .acc-actions .btn { padding: 7px 14px; font-size: 0.76rem; }
 
+.acc-actions .acc-btn-start {
+  min-width: 5.5rem;
+  text-align: center;
+}
+
+.acc-actions .acc-btn-stop,
+.acc-actions .acc-btn-edit {
+  min-width: 3.25rem;
+  text-align: center;
+}
+
+.acc-actions .acc-btn-del {
+  min-width: 3.25rem;
+  text-align: center;
+}
+
 .acc-row-detail-wrap {
   display: grid;
   grid-template-rows: 0fr;

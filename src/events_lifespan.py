@@ -8,12 +8,14 @@ from loguru import logger
 
 from lwapi.apis.events import EventsWsClient
 
+from src.runtime.events_ws_holder import bind_events_ws_client, shutdown_events_ws
+
 
 async def events_ws_background_lifespan(app: web.Application) -> AsyncIterator[None]:
-    """aiohttp cleanup_ctx：按 EVENT_WS / EVENT_KEY 可选启动 Events WS 客户端。"""
+    """注册 Events WS 客户端；实际连接在 JSON 账号 ImportUser 成功后再启动。"""
     client = EventsWsClient()
-    await client.start()
+    bind_events_ws_client(client)
     app["events_ws_client"] = client
     yield
-    await client.stop()
+    await shutdown_events_ws()
     logger.info("Events WS 后台任务已停止")

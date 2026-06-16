@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import time
 from typing import Awaitable, Callable, Optional
 
 import aiohttp
@@ -15,7 +17,20 @@ from lwapi.models.msg import AddMsg
 EventHandler = Callable[[AddMsg, dict], Awaitable[None]]
 
 _WS_HEARTBEAT_SEC = 30
-_WS_SOCK_READ_TIMEOUT_SEC = 90
+_WS_CONNECT_TIMEOUT_SEC = 30
+# hook 通道可能长时间无业务消息，不设 sock_read 超时，靠心跳检测死连接
+_RECONNECT_DELAY_MIN = 5.0
+_RECONNECT_DELAY_MAX = 120.0
+_RECONNECT_DELAY_FACTOR = 2.0
+_STABLE_CONNECTION_SEC = 60.0
+
+
+def _env_float(name: str, default: float, minimum: float) -> float:
+    try:
+        v = float(os.getenv(name, str(default)))
+    except ValueError:
+        v = default
+    return max(minimum, v)
 
 
 async def _default_event_handler(msg: AddMsg, envelope: dict) -> None:
@@ -43,6 +58,24 @@ class EventsWsClient:
         self._stop_event = asyncio.Event()
         self._handler: Optional[EventHandler] = None
         self._ws_session: Optional[aiohttp.ClientSession] = None
+        self._connected = asyncio.Event()
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected.is_set()
+
+    async def wait_connected(self, timeout: float | None = None) -> bool:
+        """等待 WebSocket 握手成功；超时返回 False。"""
+        if self._connected.is_set():
+            return True
+        try:
+            if timeout is None:
+                await self._connected.wait()
+                return True
+            await asyncio.wait_for(self._connected.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     def _resolve_config(self) -> EventsConfig | None:
         if self._ws_url and self._event_key:
@@ -67,12 +100,14 @@ class EventsWsClient:
 
         self._handler = handler or _default_event_handler
         self._stop_event.clear()
+        self._connected.clear()
         self._task = asyncio.create_task(self._ws_loop(config), name="events-ws")
         logger.success("Events WS 后台任务已启动")
 
     async def stop(self) -> None:
         """停止 WebSocket 监听并等待任务结束。"""
         self._stop_event.set()
+        self._connected.clear()
         if self._task:
             self._task.cancel()
             try:
@@ -96,11 +131,20 @@ class EventsWsClient:
         ws_url = build_events_ws_url(config.ws_url, config.event_key)
         logger.success(f"Events WebSocket 已启动: {config.ws_url}")
 
-        reconnect_delay = 2.0
+        delay_min = _env_float("EVENT_WS_RECONNECT_MIN_SEC", _RECONNECT_DELAY_MIN, 1.0)
+        delay_max = _env_float("EVENT_WS_RECONNECT_MAX_SEC", _RECONNECT_DELAY_MAX, delay_min)
+        reconnect_delay = delay_min
+
         while not self._stop_event.is_set():
             session: Optional[aiohttp.ClientSession] = None
+            connected_at = 0.0
             try:
-                timeout = aiohttp.ClientTimeout(sock_read=_WS_SOCK_READ_TIMEOUT_SEC)
+                timeout = aiohttp.ClientTimeout(
+                    total=None,
+                    connect=_WS_CONNECT_TIMEOUT_SEC,
+                    sock_connect=_WS_CONNECT_TIMEOUT_SEC,
+                    sock_read=None,
+                )
                 session = aiohttp.ClientSession(timeout=timeout)
                 self._ws_session = session
                 async with session.ws_connect(
@@ -108,16 +152,12 @@ class EventsWsClient:
                     heartbeat=_WS_HEARTBEAT_SEC,
                     receive_timeout=None,
                 ) as ws:
-                    reconnect_delay = 2.0
+                    connected_at = time.monotonic()
+                    self._connected.set()
                     logger.info("Events WebSocket 已连接")
                     while not self._stop_event.is_set():
                         try:
                             frame = await ws.receive()
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                f"Events WebSocket 读超时（>{_WS_SOCK_READ_TIMEOUT_SEC}s 无数据），将重连"
-                            )
-                            break
                         except aiohttp.ClientError as e:
                             logger.warning(f"Events WebSocket 读取异常: {e}，将重连")
                             break
@@ -144,8 +184,14 @@ class EventsWsClient:
                             aiohttp.WSMsgType.CLOSED,
                             aiohttp.WSMsgType.ERROR,
                         ):
-                            logger.warning("Events WebSocket 连接断开，将重连")
+                            logger.debug("Events WebSocket 连接断开，将重连")
                             break
+                    self._connected.clear()
+                    if (
+                        connected_at > 0
+                        and time.monotonic() - connected_at >= _STABLE_CONNECTION_SEC
+                    ):
+                        reconnect_delay = delay_min
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -159,8 +205,8 @@ class EventsWsClient:
 
             if self._stop_event.is_set():
                 break
-            logger.info(f"Events WebSocket 将在 {reconnect_delay:.0f}s 后重连")
+            logger.debug(f"Events WebSocket 将在 {reconnect_delay:.0f}s 后重连")
             await asyncio.sleep(reconnect_delay)
-            reconnect_delay = min(reconnect_delay * 1.5, 30.0)
+            reconnect_delay = min(reconnect_delay * _RECONNECT_DELAY_FACTOR, delay_max)
 
         logger.info("Events WebSocket 已停止")
