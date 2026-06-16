@@ -210,44 +210,62 @@
     >
       <div id="app-modal-edit" class="app-modal-stack">
         <h2 id="app-modal-title" class="app-modal-title">编辑账号</h2>
-        <p id="app-modal-edit-sub" class="app-modal-sub">修改 device_id、备注与本地 wxid。请先停止机器人再保存。</p>
         <form id="modal-edit-form" class="modal-form" onsubmit="submitEditAccount(event)">
           <input type="hidden" id="modal-edit-index" value="" />
-          <div class="modal-field">
-            <label for="modal-edit-device">device_id</label>
-            <input
-              type="text"
-              id="modal-edit-device"
-              class="modal-input device-id-input"
-              required
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </div>
+          <p id="modal-edit-error" class="modal-form-error" hidden role="alert"></p>
           <div class="modal-field">
             <label for="modal-edit-remark">备注</label>
             <input type="text" id="modal-edit-remark" class="modal-input" placeholder="列表中显示的名称" autocomplete="off" />
           </div>
           <div class="modal-field">
-            <label for="modal-edit-wxid">wxid（可空）</label>
-            <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
-          </div>
-          <div class="modal-field">
             <span class="modal-field-label">登录方式</span>
             <div class="modal-radio-group" role="radiogroup" aria-label="登录方式">
               <label class="modal-radio">
-                <input type="radio" name="modal-login-mode" id="modal-login-mode-local" value="local" checked />
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-local" value="local" onchange="onModalLoginModeChange()" />
                 <span class="modal-radio-text">
                   <strong>本地登录</strong>
                 </span>
               </label>
               <label class="modal-radio">
-                <input type="radio" name="modal-login-mode" id="modal-login-mode-remote" value="remote" />
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-remote" value="remote" onchange="onModalLoginModeChange()" />
                 <span class="modal-radio-text">
                   <strong>远程登录</strong>
                 </span>
               </label>
+              <label class="modal-radio">
+                <input type="radio" name="modal-login-mode" id="modal-login-mode-json" value="json" onchange="onModalLoginModeChange()" />
+                <span class="modal-radio-text">
+                  <strong>JSON 导入</strong>
+                </span>
+              </label>
             </div>
+          </div>
+          <div id="modal-edit-manual-fields">
+            <div class="modal-field">
+              <label for="modal-edit-device">device_id</label>
+              <input
+                type="text"
+                id="modal-edit-device"
+                class="modal-input device-id-input"
+                required
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="modal-field">
+              <label for="modal-edit-wxid">wxid（可空）</label>
+              <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
+            </div>
+          </div>
+          <div id="modal-edit-json-fields" class="modal-field" hidden>
+            <label for="modal-edit-json">会话 JSON</label>
+            <textarea
+              id="modal-edit-json"
+              class="modal-input modal-json-textarea"
+              rows="10"
+              spellcheck="false"
+              placeholder="粘贴 JSON"
+            ></textarea>
           </div>
           <div class="app-modal-actions">
             <button type="button" class="btn btn-ghost" onclick="closeAppModal()">取消</button>
@@ -576,6 +594,28 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       clearTimeout(window._lwapiToastTimer);
     }
 
+    function clearModalFormError() {
+      var el = document.getElementById('modal-edit-error');
+      if (!el) return;
+      el.hidden = true;
+      el.textContent = '';
+    }
+
+    function showModalFormError(msg) {
+      var el = document.getElementById('modal-edit-error');
+      if (!el) {
+        showToast(msg, 'warning');
+        return;
+      }
+      if (!msg) {
+        clearModalFormError();
+        return;
+      }
+      el.hidden = false;
+      el.textContent = msg;
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
     function showToast(msg, variant) {
       if (variant === true) variant = 'warning';
       if (variant === false) variant = 'success';
@@ -767,24 +807,188 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       }
     }
 
+    const SESSION_JSON_KEYS = [
+      'pid', 'UIN', 'wxid', 'PSKAccessKey', 'EarlyDataPart',
+      'SharedKey', 'Cookie', 'SessionKey', 'ClientVer', 'DeviceId',
+      'DeviceType', 'Host',
+    ];
+
+    const IMPORT_USER_REQUIRED_KEYS = [
+      'wxid', 'UIN', 'ClientVer', 'DeviceId', 'SessionKey',
+      'Cookie', 'SharedKey', 'EarlyDataPart', 'PSKAccessKey',
+    ];
+
+    const SESSION_JSON_ALIASES = {
+      pid: ['pid'],
+      UIN: ['UIN'],
+      wxid: ['wxid'],
+      PSKAccessKey: ['PSKAccessKey'],
+      EarlyDataPart: ['EarlyDataPart'],
+      SharedKey: ['SharedKey', 'sharedKey'],
+      Cookie: ['Cookie', 'cookie'],
+      SessionKey: ['SessionKey', 'sessionKey'],
+      ClientVer: ['ClientVer'],
+      DeviceId: ['DeviceId', 'device_id'],
+      DeviceType: ['DeviceType', 'deviceType'],
+      Host: ['Host', 'host'],
+    };
+
+    const NEED_REFRESH_JSON_HINT = '请重新获取 JSON 数据';
+
+    function isJsonLoginMode(accOrMode) {
+      var m = typeof accOrMode === 'string' ? accOrMode : (accOrMode && accOrMode.login_mode);
+      return String(m || '').toLowerCase() === 'json';
+    }
+
+    function accountSessionToJson(acc) {
+      var o = {};
+      SESSION_JSON_KEYS.forEach(function (k) {
+        var v = jsonSessionFieldValue(acc, k);
+        if (v === '' || v === null || v === undefined) return;
+        o[k] = v;
+      });
+      return JSON.stringify(o, null, 2);
+    }
+
+    function jsonSessionFieldValue(data, key) {
+      var aliases = SESSION_JSON_ALIASES[key] || [key];
+      for (var i = 0; i < aliases.length; i++) {
+        var k = aliases[i];
+        if (!data || data[k] === undefined || data[k] === null) continue;
+        if (typeof data[k] === 'string' && !data[k].trim()) continue;
+        return data[k];
+      }
+      return '';
+    }
+
+    function jsonSessionMissingFields(data) {
+      var missing = [];
+      IMPORT_USER_REQUIRED_KEYS.forEach(function (k) {
+        var v = jsonSessionFieldValue(data, k);
+        if (v === '' || v === null || v === undefined) missing.push(k);
+      });
+      return missing;
+    }
+
+    function jsonSessionComplete(acc) {
+      if (!acc || !isJsonLoginMode(acc)) return false;
+      return jsonSessionMissingFields(acc).length === 0;
+    }
+
+    function parseSessionJsonText(text) {
+      var raw = (text || '').trim();
+      if (!raw) throw new Error('请粘贴会话 JSON');
+      var data;
+      try { data = JSON.parse(raw); } catch (e) { throw new Error('JSON 格式无效'); }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('请粘贴对象格式的 JSON');
+      }
+      var missing = jsonSessionMissingFields(data);
+      if (missing.length) {
+        throw new Error(NEED_REFRESH_JSON_HINT);
+      }
+      var out = {};
+      SESSION_JSON_KEYS.forEach(function (k) {
+        var v = jsonSessionFieldValue(data, k);
+        if (v === '' || v === null || v === undefined) {
+          if (k !== 'pid') return;
+        }
+        if (k === 'pid' && (v === '' || v === null || v === undefined)) return;
+        out[k] = v;
+      });
+      return out;
+    }
+
+    function wxidConflictMessage(wxid, otherRemark) {
+      var label = (otherRemark || '').trim() || String(wxid || '').slice(0, 12) || '未备注';
+      return 'wxid 已存在（' + wxid + '，备注「' + label + '」），同一微信号只能添加一条';
+    }
+
+    function findDuplicateWxidIndex(wxid, excludeIndex) {
+      var needle = String(wxid || '').trim();
+      if (!needle || !_lastAccountsPayload) return -1;
+      for (var i = 0; i < _lastAccountsPayload.length; i++) {
+        if (excludeIndex != null && i === excludeIndex) continue;
+        var w = String((_lastAccountsPayload[i] && _lastAccountsPayload[i].wxid) || '').trim();
+        if (w === needle) return i;
+      }
+      return -1;
+    }
+
+    function isModalAddMode() {
+      return document.getElementById('modal-edit-index').value === '';
+    }
+
+    function clearModalLoginModeSelection() {
+      document.querySelectorAll('input[name="modal-login-mode"]').forEach(function (r) {
+        r.checked = false;
+      });
+    }
+
+    function onModalLoginModeChange() {
+      clearModalFormError();
+      updateModalLoginModePanels();
+    }
+
+    function updateModalLoginModePanels() {
+      var mode = getModalLoginMode();
+      var isJson = mode === 'json';
+      var isAdd = isModalAddMode();
+      var manual = document.getElementById('modal-edit-manual-fields');
+      var jsonPanel = document.getElementById('modal-edit-json-fields');
+      var deviceInput = document.getElementById('modal-edit-device');
+      if (isAdd && !mode) {
+        if (manual) manual.hidden = true;
+        if (jsonPanel) jsonPanel.hidden = true;
+        if (deviceInput) deviceInput.required = false;
+        return;
+      }
+      if (manual) manual.hidden = isJson;
+      if (jsonPanel) jsonPanel.hidden = !isJson;
+      if (deviceInput) deviceInput.required = !isJson && !!mode;
+    }
+
     function loginModeLabel(mode) {
+      if (isJsonLoginMode(mode)) return 'JSON 导入';
       return (mode || 'remote') === 'local' ? '本地登录' : '远程登录';
     }
 
     function setModalLoginMode(mode) {
-      var val = (mode || 'remote') === 'local' ? 'local' : 'remote';
+      var val = 'remote';
+      if (mode === 'local' || mode === 'remote' || mode === 'json') val = mode;
+      else if (mode === 'relay') val = 'local';
       var el = document.querySelector('input[name="modal-login-mode"][value="' + val + '"]');
       if (el) el.checked = true;
+      updateModalLoginModePanels();
     }
 
     function getModalLoginMode() {
       var checked = document.querySelector('input[name="modal-login-mode"]:checked');
-      return checked && checked.value === 'local' ? 'local' : 'remote';
+      return checked ? checked.value : '';
+    }
+
+    function accountPidBadgeText(acc) {
+      var pid = acc.pid;
+      if (pid === undefined || pid === null || pid === '') return 'Pid';
+      return 'Pid ' + String(pid);
+    }
+
+    function jsonImportBadgeClass(acc) {
+      if (!jsonSessionComplete(acc)) return 'badge-refresh-json';
+      if (acc.import_connected) return 'badge-on';
+      return 'badge-imported';
     }
 
     function badgeHtml(acc) {
       if (acc.pending_login) return '<span class="badge badge-wait">登录中</span>';
       if (acc.running) return '<span class="badge badge-on">运行中</span>';
+      if (isJsonLoginMode(acc)) {
+        if (!jsonSessionComplete(acc)) {
+          return '<span class="badge badge-refresh-json">' + esc(NEED_REFRESH_JSON_HINT) + '</span>';
+        }
+        var label = accountPidBadgeText(acc);
+        return '<span class="badge ' + jsonImportBadgeClass(acc) + '" title="' + esc(label) + '">' + esc(label) + '</span>';
+      }
       return '<span class="badge badge-off">未运行</span>';
     }
 
@@ -816,6 +1020,11 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       return remark + ' <span class="acc-nickname">' + esc(nick) + '</span>';
     }
 
+    function accountMetaHtml(acc) {
+      var wx = acc.wxid || '';
+      return '<span class="acc-wxid" title="' + esc(wx) + '">' + esc(wx || '—') + '</span>';
+    }
+
     function patchAccountCardDom(card, acc, index) {
       card.classList.remove('account-card--idle', 'account-card--running', 'account-card--pending');
       card.classList.add(accountCardStateClass(acc));
@@ -825,8 +1034,8 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       if (titleEl) titleEl.innerHTML = accountTitleHtml(acc);
       const badgeSlot = card.querySelector('.acc-badges');
       if (badgeSlot) badgeSlot.innerHTML = badgeHtml(acc);
-      const w = card.querySelector('.acc-wxid');
-      if (w) { w.textContent = acc.wxid || '—'; w.title = acc.wxid || ''; }
+      const metaSlot = card.querySelector('.acc-row-meta');
+      if (metaSlot) metaSlot.innerHTML = accountMetaHtml(acc);
       if (!acc.pending_login && !acc.running) {
         clearAccountQrUi(index);
       }
@@ -839,8 +1048,22 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const stopBtn = card.querySelector('.acc-btn-stop');
       const editBtn = card.querySelector('.acc-btn-edit');
       const delBtn = card.querySelector('.acc-btn-del');
-      if (startBtn) startBtn.disabled = disableStart;
-      if (stopBtn) stopBtn.disabled = !running && !pending;
+      if (startBtn) {
+        if (isJsonLoginMode(acc)) {
+          startBtn.hidden = true;
+        } else {
+          startBtn.hidden = false;
+          startBtn.disabled = disableStart;
+        }
+      }
+      if (stopBtn) {
+        if (isJsonLoginMode(acc)) {
+          stopBtn.hidden = true;
+        } else {
+          stopBtn.hidden = false;
+          stopBtn.disabled = !running && !pending;
+        }
+      }
       if (editBtn) editBtn.disabled = disableMutate;
       if (delBtn) delBtn.disabled = disableMutate;
     }
@@ -870,14 +1093,25 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
     function buildAccountRow(acc, index) {
       const running = acc.running;
       const pending = acc.pending_login;
+      const isJson = isJsonLoginMode(acc);
       const disableStart = running || pending;
       const disableMutate = running || pending;
       const badge = badgeHtml(acc);
-      const wx = acc.wxid || '';
       const stateCls = accountCardStateClass(acc);
       const isExpanded = !!pending;
       const expCls = isExpanded ? ' is-expanded' : '';
       const ariaHid = isExpanded ? 'false' : 'true';
+      const startBtnHtml = isJson
+        ? ''
+        : '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
+          (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>';
+      const stopBtnHtml = isJson
+        ? ''
+        : '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
+          (!running && !pending ? ' disabled' : '') + '>停止</button>';
+      const testBtnHtml = isJson
+        ? '<button type="button" class="btn btn-primary acc-btn-import-test" data-import-test="' + index + '" onclick="testImportConnection(' + index + ')">测试连接</button>'
+        : '';
 
       return (
         '<div class="account-card ' + stateCls + expCls + '" data-idx="' + index + '">' +
@@ -888,13 +1122,12 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         '<div class="acc-badges">' + badge + '</div>' +
         '</div>' +
         '<div class="acc-row-meta">' +
-        '<span class="acc-wxid" title="' + esc(wx) + '">' + esc(wx || '—') + '</span>' +
+        accountMetaHtml(acc) +
         '</div>' +
         '<div class="actions acc-actions">' +
-        '<button type="button" class="btn btn-primary acc-btn-start" data-start="' + index + '"' +
-        (disableStart ? ' disabled' : '') + ' onclick="startBot(' + index + ')">启动</button>' +
-        '<button type="button" class="btn btn-ghost acc-btn-stop" data-stop="' + index + '" onclick="stopBot(' + index + ')"' +
-        (!running && !pending ? ' disabled' : '') + '>停止</button>' +
+        startBtnHtml +
+        stopBtnHtml +
+        testBtnHtml +
         '<button type="button" class="btn btn-ghost acc-btn-edit" data-edit="' + index + '" onclick="editAccount(' + index + ')"' +
         (disableMutate ? ' disabled' : '') + '>编辑</button>' +
         '<button type="button" class="btn btn-danger acc-btn-del" data-del="' + index + '" onclick="deleteAccount(' + index + ')"' +
@@ -1047,25 +1280,80 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       await refreshAccounts({ soft: true });
     }
 
+    async function testImportConnection(index) {
+      var btn = document.querySelector('.acc-btn-import-test[data-import-test="' + index + '"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '测试中…';
+      }
+      var needRefresh = false;
+      try {
+        var res = await fetch('/api/accounts/' + index + '/import-test', {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        if (res.status === 401) {
+          var next = encodeURIComponent(location.pathname + location.search);
+          location.href = '/login.html?next=' + next;
+          return;
+        }
+        var text = await res.text();
+        var body = {};
+        try { body = text ? JSON.parse(text) : {}; } catch (e) { body = { raw: text }; }
+        if (!res.ok) {
+          var errMsg = (body && body.error) || text || String(res.status);
+          console.error('[ImportUser] 测试连接失败', body);
+          showToast(typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg), 'error');
+          if (body && body.session_cleared) needRefresh = true;
+          return;
+        }
+        console.log('[ImportUser] 测试连接响应', body);
+        if (body && body.data !== undefined) {
+          console.log('[ImportUser] data', body.data);
+        }
+        var data = body.data;
+        var msg = '连接成功';
+        if (body.nickname) {
+          msg = '连接成功：' + body.nickname;
+        } else if (data && typeof data === 'object') {
+          msg = data.message || data.Message || data.msg || msg;
+          if (data.wxid) msg += '（' + data.wxid + '）';
+        }
+        showToast(msg, 'success');
+        needRefresh = true;
+      } catch (e) {
+        console.error('[ImportUser] 测试连接失败', e);
+        notifyError(e);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '测试连接';
+        }
+        if (needRefresh) await refreshAccounts({ soft: true });
+      }
+    }
+
     function openAddAccountModal() {
       resetConfirmModal();
+      clearModalFormError();
       document.getElementById('app-modal-edit').hidden = false;
       document.getElementById('app-modal-confirm').hidden = true;
       var panel = document.querySelector('.app-modal-panel');
       if (panel) panel.setAttribute('aria-labelledby', 'app-modal-title');
       document.getElementById('app-modal-title').textContent = '新增账号';
-      var sub = document.getElementById('app-modal-edit-sub');
-      if (sub) sub.textContent = '填写 device_id 和备注。wxid 可留空（登录后自动写入）。';
       document.getElementById('modal-edit-index').value = '';
       document.getElementById('modal-edit-device').value = '';
       document.getElementById('modal-edit-remark').value = '';
       document.getElementById('modal-edit-wxid').value = '';
-      setModalLoginMode('local');
+      var jsonEl = document.getElementById('modal-edit-json');
+      if (jsonEl) jsonEl.value = '';
+      clearModalLoginModeSelection();
+      updateModalLoginModePanels();
       var submitBtn = document.getElementById('modal-edit-submit');
       if (submitBtn) submitBtn.textContent = '添加';
       openAppModal();
       setTimeout(function () {
-        var el = document.getElementById('modal-edit-device');
+        var el = document.getElementById('modal-edit-remark');
         if (el) el.focus();
       }, 30);
     }
@@ -1076,6 +1364,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       root.classList.remove('is-open');
       root.setAttribute('aria-hidden', 'true');
       document.removeEventListener('keydown', onAppModalKeydown);
+      clearModalFormError();
       resetConfirmModal();
     }
 
@@ -1243,50 +1532,86 @@ function openConfirmModal(opts) {
       }
       if (!acc) return;
       resetConfirmModal();
+      clearModalFormError();
       document.getElementById('app-modal-edit').hidden = false;
       document.getElementById('app-modal-confirm').hidden = true;
       var panel = document.querySelector('.app-modal-panel');
       if (panel) panel.setAttribute('aria-labelledby', 'app-modal-title');
       document.getElementById('app-modal-title').textContent = '编辑账号';
-      var sub = document.getElementById('app-modal-edit-sub');
-      if (sub) sub.textContent = '修改 device_id、备注与本地 wxid。请先停止机器人再保存。';
       var submitBtn = document.getElementById('modal-edit-submit');
       if (submitBtn) submitBtn.textContent = '保存';
       document.getElementById('modal-edit-index').value = String(index);
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
       document.getElementById('modal-edit-wxid').value = acc.wxid || '';
+      var jsonEl = document.getElementById('modal-edit-json');
+      if (jsonEl) jsonEl.value = isJsonLoginMode(acc) ? accountSessionToJson(acc) : '';
       setModalLoginMode(acc.login_mode || 'local');
       openAppModal();
       setTimeout(function () {
-        var el = document.getElementById('modal-edit-device');
+        var mode = getModalLoginMode();
+        var el = mode === 'json'
+          ? document.getElementById('modal-edit-json')
+          : document.getElementById('modal-edit-device');
         if (el) el.focus();
       }, 30);
     }
 
     async function submitEditAccount(e) {
       e.preventDefault();
+      clearModalFormError();
       var indexVal = document.getElementById('modal-edit-index').value;
       var isAdd = indexVal === '';
       var btn = document.getElementById('modal-edit-submit');
-      var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
       var remark = document.getElementById('modal-edit-remark').value.trim();
-      var wxid = document.getElementById('modal-edit-wxid').value.trim();
       var login_mode = getModalLoginMode();
-      var didErr = deviceIdValidationError(device_id);
-      if (didErr) {
-        showToast(didErr, 'warning');
+      if (!login_mode) {
+        showModalFormError('请选择登录方式');
         return;
       }
+      var body;
+      if (login_mode === 'json') {
+        var session;
+        try {
+          session = parseSessionJsonText(document.getElementById('modal-edit-json').value);
+        } catch (err) {
+          showModalFormError(err.message || String(err));
+          return;
+        }
+        var device_id = normalizeDeviceId(String(session.DeviceId || ''));
+        var wxid = String(session.wxid || '').trim();
+        if (!remark) remark = wxid.slice(0, 12) || device_id.slice(0, 8);
+        body = Object.assign({ device_id: device_id, remark: remark, wxid: wxid, login_mode: 'json' }, session);
+      } else {
+        var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
+        var wxid = document.getElementById('modal-edit-wxid').value.trim();
+        var didErr = deviceIdValidationError(device_id);
+        if (didErr) {
+          showModalFormError(didErr);
+          return;
+        }
+        body = { device_id: device_id, remark: remark, login_mode: login_mode };
+        if (wxid) body.wxid = wxid;
+      }
       if (isAdd && !remark) {
-        showToast('请填写机器人备注', 'warning');
+        showModalFormError('请填写机器人备注');
         return;
+      }
+      var wxidForDup = body.wxid ? String(body.wxid).trim() : '';
+      if (wxidForDup) {
+        var dupIdx = findDuplicateWxidIndex(
+          wxidForDup,
+          isAdd ? null : parseInt(indexVal, 10)
+        );
+        if (dupIdx >= 0) {
+          var dupAcc = _lastAccountsPayload[dupIdx];
+          showModalFormError(wxidConflictMessage(wxidForDup, dupAcc && dupAcc.remark));
+          return;
+        }
       }
       if (btn) btn.disabled = true;
       try {
         if (isAdd) {
-          var body = { device_id: device_id, remark: remark, login_mode: login_mode };
-          if (wxid) body.wxid = wxid;
           await fetchJson('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1298,14 +1623,14 @@ function openConfirmModal(opts) {
           await fetchJson('/api/accounts/' + index, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: device_id, remark: remark, wxid: wxid, login_mode: login_mode }),
+            body: JSON.stringify(body),
           });
         }
         closeAppModal();
         await refreshAccounts({ soft: !isAdd });
         showToast(isAdd ? '账号已添加' : '已保存', 'success');
       } catch (err) {
-        notifyError(err);
+        showModalFormError(err.message || String(err));
       } finally {
         if (btn) btn.disabled = false;
       }

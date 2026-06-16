@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .utils import atomic_write_json, logger
 
@@ -24,6 +24,30 @@ def account_slot_key(account: dict) -> str:
         remark = did[:8] if did else "account"
     # U+001F 单元分隔符，降低 remark 内含常见符号时拼接歧义
     return f"{remark}\x1f{did}"
+
+
+def find_duplicate_wxid_index(
+    accounts: List[Dict],
+    wxid: str,
+    *,
+    exclude_idx: Optional[int] = None,
+) -> Optional[int]:
+    """若列表中已有相同 wxid（非空），返回其下标；否则返回 None。"""
+    needle = str(wxid or "").strip()
+    if not needle:
+        return None
+    for i, acc in enumerate(accounts):
+        if exclude_idx is not None and i == exclude_idx:
+            continue
+        if str(acc.get("wxid") or "").strip() == needle:
+            return i
+    return None
+
+
+def wxid_conflict_message(wxid: str, other_remark: str = "") -> str:
+    """生成 wxid 重复时的中文错误说明。"""
+    label = str(other_remark or "").strip() or str(wxid or "")[:12] or "未备注"
+    return f"wxid 已存在（{wxid}，备注「{label}」），同一微信号只能添加一条"
 
 
 def load_accounts() -> List[Dict]:

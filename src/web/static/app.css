@@ -61,6 +61,9 @@
   --sidebar-w: 252px;
   --topbar-h: 60px;
 
+  --z-modal: 1000;
+  --z-toast: 1100;
+
   --scrollbar-size: 6px;
   --scrollbar-thumb: rgba(123, 140, 248, 0.22);
   --scrollbar-thumb-hover: rgba(123, 140, 248, 0.42);
@@ -1310,6 +1313,32 @@ html.theme-light .acc-avatar-placeholder {
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
+.badge-imported {
+  background: rgba(167, 139, 250, 0.14);
+  color: #c4b5fd;
+  border: 1px solid rgba(167, 139, 250, 0.38);
+}
+
+.badge-imported::before { background: #a78bfa; }
+
+.badge-refresh-json {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.badge-refresh-json::before { background: #f59e0b; }
+
+html.theme-light .badge-refresh-json {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
 .acc-row-meta {
   grid-area: meta;
   margin: 0;
@@ -1350,6 +1379,18 @@ html.theme-light .acc-login-mode {
   border: 1px solid var(--border);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-row-meta .acc-pid {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: rgba(196, 181, 253, 0.95);
+  padding: 5px 10px;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.28);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
@@ -2145,7 +2186,7 @@ html.theme-light .plugin-settings-iframe {
   top: calc(var(--topbar-h) + 14px);
   left: 50%;
   transform: translateX(-50%) translateY(-10px);
-  z-index: 200;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2222,7 +2263,7 @@ html.theme-light .toast--warning { border-color: rgba(31, 169, 160, 0.55); }
 .app-modal {
   position: fixed;
   inset: 0;
-  z-index: 320;
+  z-index: var(--z-modal);
   display: none;
   align-items: center;
   justify-content: center;
@@ -2420,6 +2461,29 @@ html.theme-light .modal-field-label { color: var(--star-deep); }
   font-size: 0.82rem;
   outline: none;
   transition: all 0.18s;
+}
+
+.modal-json-textarea {
+  min-height: 180px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.modal-form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #ffb4c8;
+  background: rgba(255, 138, 168, 0.1);
+  border: 1px solid rgba(255, 138, 168, 0.38);
+}
+
+html.theme-light .modal-form-error {
+  color: #c2185b;
+  background: rgba(232, 90, 133, 0.08);
+  border-color: rgba(232, 90, 133, 0.35);
 }
 
 html.theme-light .modal-input {
