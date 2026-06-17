@@ -764,14 +764,6 @@ html.theme-light .card h2 { color: var(--moon-deep); }
   box-shadow: 0 8px 24px var(--star-glow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-html.theme-light .btn-primary {
-  background: linear-gradient(135deg, #7ec8ff 0%, var(--star) 50%, var(--star-deep) 100%);
-  border-color: rgba(59, 130, 246, 0.55);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(20, 60, 120, 0.32);
-  box-shadow: 0 6px 22px var(--star-glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
 .btn-ghost {
   background: transparent;
   border-color: var(--border);
@@ -3189,3 +3181,8 @@ html.theme-light .login-hint-icon { color: var(--moon-deep); }
   background: var(--star-soft);
   color: var(--text);
 }
+
+/* Theme toggle: moon in dark, sun with glow in light */
+.theme-icon-sun { display: none; }
+html.theme-light .theme-icon-moon { display: none; }
+html.theme-light .theme-icon-sun { display: inline; filter: drop-shadow(0 0 6px var(--star, #3b82f6)); }
