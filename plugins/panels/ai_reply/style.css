@@ -5,13 +5,13 @@
 :root {
   --bg: #0a0a10;
   --surface: rgba(18, 20, 32, 0.92);
-  --border: rgba(123, 140, 248, 0.28);
-  --accent: #7b8cf8;
-  --accent-2: #5c6fd6;
+  --border: rgba(59, 130, 246, 0.28);
+  --accent: #3b82f6;
+  --accent-2: #2563eb;
   --text: #eceff7;
   --muted: #8b94b8;
   --tip: #6d7699;
-  --scroll-thumb: rgba(123, 140, 248, 0.45);
+  --scroll-thumb: rgba(59, 130, 246, 0.45);
   --scroll-track: rgba(0, 0, 0, 0.25);
   --gap-section: 22px;
   --gap-field: 10px;
@@ -35,8 +35,8 @@ body {
   line-height: 1.55;
   color: var(--text);
   background:
-    radial-gradient(ellipse 120% 80% at 0% -20%, rgba(123, 140, 248, 0.12), transparent 55%),
-    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(92, 111, 214, 0.08), transparent 50%),
+    radial-gradient(ellipse 120% 80% at 0% -20%, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(37, 99, 235, 0.08), transparent 50%),
     var(--bg);
 }
 
@@ -111,7 +111,7 @@ body {
   font-size: 1.02rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #c8d0ff;
+  color: #bfdbfe;
 }
 
 .field {
@@ -163,7 +163,7 @@ body {
 }
 
 .endpoint-preview code {
-  color: #a8b4ff;
+  color: #93c5fd;
   font-size: 0.78rem;
   word-break: break-all;
 }
@@ -260,7 +260,7 @@ body {
   gap: 10px;
   padding: 10px 16px;
   border-radius: 10px;
-  border: 1px solid rgba(123, 140, 248, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.25);
   background: rgba(0, 0, 0, 0.25);
   cursor: pointer;
   font-size: 0.88rem;
@@ -270,8 +270,8 @@ body {
 }
 
 .chip-check:has(input:checked) {
-  border-color: rgba(123, 140, 248, 0.55);
-  background: rgba(123, 140, 248, 0.12);
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.12);
   color: var(--text);
 }
 
@@ -295,7 +295,7 @@ body {
 .input {
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(123, 140, 248, 0.38);
+  border: 1px solid rgba(59, 130, 246, 0.38);
   background: rgba(0, 0, 0, 0.4);
   color: #fff;
   font-size: 14px;
@@ -311,7 +311,7 @@ select.input {
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(123, 140, 248, 0.22);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
 }
 
 .toggle-inline {
@@ -341,8 +341,8 @@ select.input {
 }
 
 .btn-accent {
-  border-color: rgba(123, 140, 248, 0.5);
-  background: linear-gradient(135deg, rgba(123, 140, 248, 0.35), rgba(92, 111, 214, 0.45));
+  border-color: rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.45));
   font-weight: 600;
 }
 
