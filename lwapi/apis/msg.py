@@ -37,10 +37,12 @@ from ..models.msg_requests import (
 )
 
 MessageHandler = Callable[["LwApiClient", SyncMessageResponse], Awaitable[None]]
+WsExhaustedCallback = Callable[[], Awaitable[None]]
 
 # 心跳与底层读超时：网络半开时 async for 可能一直阻塞，需靠 sock_read + 心跳触发重连
 _WS_HEARTBEAT_SEC = 30
 _WS_SOCK_READ_TIMEOUT_SEC = 90
+_WS_MAX_RECONNECT_ATTEMPTS = 3
 
 
 class MsgClient:
@@ -56,6 +58,7 @@ class MsgClient:
         self.interval = 1.0  # 轮询间隔（秒）
         self._sync_mode: SyncMode = "websocket"
         self._ws_session: Optional[aiohttp.ClientSession] = None
+        self._on_ws_exhausted: Optional[WsExhaustedCallback] = None
 
     async def _sync_once(self) -> SyncMessageResponse:
         """单次同步消息（服务端长轮询，超时需明显长于普通接口）。"""
@@ -152,6 +155,7 @@ class MsgClient:
         logger.success(f"微信消息 WebSocket 已启动: {ws_url}")
 
         reconnect_delay = 2.0
+        reconnect_failures = 0
         while not self._stop_event.is_set():
             session: Optional[aiohttp.ClientSession] = None
             try:
@@ -164,6 +168,7 @@ class MsgClient:
                     receive_timeout=None,
                 ) as ws:
                     reconnect_delay = 2.0
+                    reconnect_failures = 0
                     logger.info(f"WebSocket 已连接 (wxid={wxid})")
                     while not self._stop_event.is_set():
                         try:
@@ -213,7 +218,23 @@ class MsgClient:
 
             if self._stop_event.is_set():
                 break
-            logger.info(f"WebSocket 将在 {reconnect_delay:.0f}s 后重连 (wxid={wxid})")
+
+            reconnect_failures += 1
+            if reconnect_failures >= _WS_MAX_RECONNECT_ATTEMPTS:
+                logger.error(
+                    f"WebSocket 已连续重连失败 {reconnect_failures} 次，停止重连 (wxid={wxid})"
+                )
+                if not self._stop_event.is_set() and self._on_ws_exhausted:
+                    try:
+                        await self._on_ws_exhausted()
+                    except Exception:
+                        logger.exception(f"WebSocket 耗尽回调异常 (wxid={wxid})")
+                break
+
+            logger.info(
+                f"WebSocket 将在 {reconnect_delay:.0f}s 后重连 "
+                f"({reconnect_failures}/{_WS_MAX_RECONNECT_ATTEMPTS}, wxid={wxid})"
+            )
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 1.5, 30.0)
 
@@ -226,6 +247,7 @@ class MsgClient:
         *,
         mode: str | SyncMode = "poll",
         wxid: Optional[str] = None,
+        on_ws_exhausted: Optional[WsExhaustedCallback] = None,
     ):
         """
         启动消息监听，回调会收到完整的 LwApiClient 实例。
@@ -234,6 +256,7 @@ class MsgClient:
             handler: 消息处理回调
             mode: poll（HTTP 长轮询）或 websocket（每 wxid 一条 WS）
             wxid: WebSocket 模式必填；未传时使用 client.wxid
+            on_ws_exhausted: WebSocket 连续重连失败达上限时调用（非手动 stop）
         """
         if self._task and not self._task.done():
             logger.warning("消息监听已启动，请勿重复启动")
@@ -256,6 +279,7 @@ class MsgClient:
 
         self._handler = handler
         self._sync_mode = sync_mode
+        self._on_ws_exhausted = on_ws_exhausted
         self._stop_event.clear()
 
         if sync_mode == "websocket":
@@ -272,6 +296,7 @@ class MsgClient:
     # ==================== 停止监听 ====================
     def stop(self):
         """停止消息监听（轮询或 WebSocket）"""
+        self._on_ws_exhausted = None
         self._stop_event.set()
         if self._task:
             self._task.cancel()

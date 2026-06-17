@@ -15,6 +15,7 @@ from lwapi.events_utils import EventsConfig, build_events_ws_url, events_ws_enab
 from lwapi.models.msg import AddMsg
 
 EventHandler = Callable[[AddMsg, dict], Awaitable[None]]
+WsExhaustedCallback = Callable[[], Awaitable[None]]
 
 _WS_HEARTBEAT_SEC = 30
 _WS_CONNECT_TIMEOUT_SEC = 30
@@ -23,6 +24,7 @@ _RECONNECT_DELAY_MIN = 5.0
 _RECONNECT_DELAY_MAX = 120.0
 _RECONNECT_DELAY_FACTOR = 2.0
 _STABLE_CONNECTION_SEC = 60.0
+_WS_MAX_RECONNECT_ATTEMPTS = 3
 
 
 def _env_float(name: str, default: float, minimum: float) -> float:
@@ -59,6 +61,11 @@ class EventsWsClient:
         self._handler: Optional[EventHandler] = None
         self._ws_session: Optional[aiohttp.ClientSession] = None
         self._connected = asyncio.Event()
+        self._on_ws_exhausted: Optional[WsExhaustedCallback] = None
+
+    def set_on_ws_exhausted(self, callback: WsExhaustedCallback | None) -> None:
+        """WebSocket 连续重连失败达上限时调用（非手动 stop）。"""
+        self._on_ws_exhausted = callback
 
     @property
     def is_connected(self) -> bool:
@@ -106,6 +113,7 @@ class EventsWsClient:
 
     async def stop(self) -> None:
         """停止 WebSocket 监听并等待任务结束。"""
+        self._on_ws_exhausted = None
         self._stop_event.set()
         self._connected.clear()
         if self._task:
@@ -134,6 +142,7 @@ class EventsWsClient:
         delay_min = _env_float("EVENT_WS_RECONNECT_MIN_SEC", _RECONNECT_DELAY_MIN, 1.0)
         delay_max = _env_float("EVENT_WS_RECONNECT_MAX_SEC", _RECONNECT_DELAY_MAX, delay_min)
         reconnect_delay = delay_min
+        reconnect_failures = 0
 
         while not self._stop_event.is_set():
             session: Optional[aiohttp.ClientSession] = None
@@ -153,6 +162,7 @@ class EventsWsClient:
                     receive_timeout=None,
                 ) as ws:
                     connected_at = time.monotonic()
+                    reconnect_failures = 0
                     self._connected.set()
                     logger.info("Events WebSocket 已连接")
                     while not self._stop_event.is_set():
@@ -205,7 +215,23 @@ class EventsWsClient:
 
             if self._stop_event.is_set():
                 break
-            logger.debug(f"Events WebSocket 将在 {reconnect_delay:.0f}s 后重连")
+
+            reconnect_failures += 1
+            if reconnect_failures >= _WS_MAX_RECONNECT_ATTEMPTS:
+                logger.error(
+                    f"Events WebSocket 已连续重连失败 {reconnect_failures} 次，停止重连"
+                )
+                if not self._stop_event.is_set() and self._on_ws_exhausted:
+                    try:
+                        await self._on_ws_exhausted()
+                    except Exception:
+                        logger.exception("Events WebSocket 耗尽回调异常")
+                break
+
+            logger.debug(
+                f"Events WebSocket 将在 {reconnect_delay:.0f}s 后重连 "
+                f"({reconnect_failures}/{_WS_MAX_RECONNECT_ATTEMPTS})"
+            )
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * _RECONNECT_DELAY_FACTOR, delay_max)
 

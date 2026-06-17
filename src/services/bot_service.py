@@ -32,7 +32,7 @@ from lwapi.events_utils import events_ws_enabled
 from lwapi.exceptions import ApiError, HttpError, LoginError
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
-from src.account_loader import save_accounts
+from src.account_loader import load_accounts_safe, save_accounts
 from src.login_service import (
     LoginService,
     apply_import_user_profile,
@@ -58,6 +58,12 @@ BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
 DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
     os.getenv("LWAPI_MSG_SYNC_MODE"),
     default="websocket",
+)
+_WS_EXHAUSTED_STOP_MESSAGE = (
+    "WebSocket 重连失败已达上限，账号已自动停止，请手动重新启动"
+)
+_EVENTS_WS_EXHAUSTED_STOP_MESSAGE = (
+    "EVENT_WS 重连失败已达上限，账号已自动停止，请手动重新启动"
 )
 
 
@@ -219,6 +225,27 @@ class BotService:
                 pass
         return True
 
+    async def stop_json_bots_on_events_ws_exhausted(self) -> None:
+        """EVENT_WS 重连耗尽时停止所有在线 JSON 账号。"""
+        accounts = load_accounts_safe()
+        running = self.running_account_indices()
+        for i, acc in enumerate(accounts):
+            if normalize_login_mode(acc.get("login_mode")) != "json":
+                continue
+            if i not in running:
+                continue
+            remark = effective_account_remark(acc)
+            if self._events:
+                await self._events.emit(
+                    i,
+                    {
+                        "event": "bot_stopped",
+                        "reason": "ws_exhausted",
+                        "message": _EVENTS_WS_EXHAUSTED_STOP_MESSAGE,
+                    },
+                )
+            await self.stop_for_account(i, remark=remark)
+
     async def send_text_message(self, bot_wxid: str, to_wxid: str, content: str) -> dict:
         """
         使用当前在线的机器人客户端发送文本（需该账号机器人已启动且已登录）。
@@ -330,10 +357,22 @@ class BotService:
                         )
                         client.login.start_keepalive(sec_interval=sec_iv)
                         sync_mode = DEFAULT_MSG_SYNC_MODE
+                        hold = asyncio.get_running_loop().create_future()
+                        ws_gave_up = False
+
+                        async def on_msg_ws_exhausted() -> None:
+                            nonlocal ws_gave_up
+                            ws_gave_up = True
+                            if not hold.done():
+                                hold.set_result(None)
+
                         client.msg.start(
                             handler=default_message_handler,
                             mode=sync_mode,
                             wxid=wxid,
+                            on_ws_exhausted=on_msg_ws_exhausted
+                            if sync_mode == "websocket"
+                            else None,
                         )
                         sync_label = (
                             "WebSocket"
@@ -356,11 +395,23 @@ class BotService:
                         await register_online_client(wxid, client)
                         await notify_bot_online(client)
                         try:
-                            hold = asyncio.get_running_loop().create_future()
                             await hold
                         finally:
                             await notify_bot_offline(wxid)
                             await unregister_online_client(wxid)
+                        if ws_gave_up:
+                            bot_logger.error(
+                                f"【{remark}】{_WS_EXHAUSTED_STOP_MESSAGE}"
+                            )
+                            if self._events:
+                                await emit(
+                                    {
+                                        "event": "bot_stopped",
+                                        "reason": "ws_exhausted",
+                                        "message": _WS_EXHAUSTED_STOP_MESSAGE,
+                                    }
+                                )
+                            break
                     except asyncio.CancelledError:
                         bot_logger.info(f"【{remark}】账号已停止")
                         raise
@@ -503,12 +554,24 @@ class BotService:
 
                     client.set_wxid(wxid)
 
+                    hold = asyncio.get_running_loop().create_future()
+                    ws_gave_up = False
+
+                    async def on_msg_ws_exhausted() -> None:
+                        nonlocal ws_gave_up
+                        ws_gave_up = True
+                        if not hold.done():
+                            hold.set_result(None)
+
                     if not events_ws_enabled():
                         sync_mode = DEFAULT_MSG_SYNC_MODE
                         client.msg.start(
                             handler=default_message_handler,
                             mode=sync_mode,
                             wxid=wxid,
+                            on_ws_exhausted=on_msg_ws_exhausted
+                            if sync_mode == "websocket"
+                            else None,
                         )
                         recv_label = (
                             "WebSocket"
@@ -541,7 +604,6 @@ class BotService:
                             },
                         )
 
-                    hold = asyncio.get_running_loop().create_future()
                     await hold
                 except asyncio.CancelledError:
                     bot_logger.info(f"【{remark}】JSON 账号已停止")
@@ -551,6 +613,20 @@ class BotService:
                     self._resolve_json_ready_future(
                         account_idx, JsonImportError(str(e))
                     )
+                else:
+                    if ws_gave_up:
+                        bot_logger.error(
+                            f"【{remark}】{_WS_EXHAUSTED_STOP_MESSAGE}"
+                        )
+                        if self._events:
+                            await self._events.emit(
+                                account_idx,
+                                {
+                                    "event": "bot_stopped",
+                                    "reason": "ws_exhausted",
+                                    "message": _WS_EXHAUSTED_STOP_MESSAGE,
+                                },
+                            )
                 finally:
                     if use_events_ws:
                         await unsubscribe_events_ws()

@@ -765,6 +765,11 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
         refreshAccounts({ soft: true });
         return;
       }
+      if (ev === 'bot_stopped') {
+        if (st) st.innerHTML = '<span class="err">' + esc(msg.message || '账号已停止') + '</span>';
+        refreshAccounts({ soft: true });
+        return;
+      }
       if (ev === 'login_interrupted') {
         if (msg.code === 'canceled') {
           clearAccountQrUi(index);

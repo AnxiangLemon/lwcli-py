@@ -72,6 +72,8 @@ class AdminWebApp:
 
     def build(self) -> web.Application:
         app = web.Application(middlewares=[auth_middleware])
+        app["bot_service"] = self.bot_service
+        app["account_events"] = self.account_events
         app.cleanup_ctx.append(plugin_background_lifespan)
         app.cleanup_ctx.append(events_ws_background_lifespan)
         app.add_routes(
