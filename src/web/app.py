@@ -25,7 +25,6 @@ from src.account_loader import (
 from src.device_id import device_id_error_message, normalize_device_id
 from src.message_inbox import clear_inbox, query_list, query_summary
 from src.plugins.lifecycle import plugin_background_lifespan
-from src.events_lifespan import events_ws_background_lifespan
 from src.plugins.config import (
     is_secret_placeholder,
     load_plugin_settings,
@@ -39,14 +38,9 @@ from src.plugins.panel import (
 )
 from src.plugins.registry import REGISTRY, list_plugin_specs
 from src.plugins.settings import load_enabled_ids, save_enabled_ids
-from src.login_service import (
-    NEED_REFRESH_JSON_HINT,
-    extract_session_import_fields,
-    normalize_login_mode,
-    validate_import_user_account,
-)
+from src.login_service import normalize_login_mode
 from src.runtime.account_events import AccountEventHub
-from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE, JsonImportError
+from src.services.bot_service import BotService, DEFAULT_MSG_SYNC_MODE
 from src.web.auth import (
     api_auth_login,
     api_auth_logout,
@@ -75,7 +69,6 @@ class AdminWebApp:
         app["bot_service"] = self.bot_service
         app["account_events"] = self.account_events
         app.cleanup_ctx.append(plugin_background_lifespan)
-        app.cleanup_ctx.append(events_ws_background_lifespan)
         app.add_routes(
             [
                 web.static("/static", str(STATIC_DIR)),
@@ -93,7 +86,6 @@ class AdminWebApp:
                 web.get("/ws/account/{idx}", self.ws_account),
                 web.post("/api/accounts/{idx}/start", self.api_start_one),
                 web.post("/api/accounts/{idx}/stop", self.api_stop_one),
-                web.post("/api/accounts/{idx}/import-test", self.api_account_import_test),
                 web.post("/api/start-all", self.api_start_all),
                 web.get("/api/plugins", self.api_plugins_get),
                 web.put("/api/plugins", self.api_plugins_put),
@@ -178,21 +170,11 @@ class AdminWebApp:
         except json.JSONDecodeError:
             return web.json_response({"error": "无效 JSON"}, status=400)
         login_mode = normalize_login_mode(body.get("login_mode", "local"))
-        session_fields = extract_session_import_fields(body)
-        device_id = normalize_device_id(
-            str(body.get("device_id") or session_fields.get("DeviceId") or "")
-        )
+        device_id = normalize_device_id(str(body.get("device_id") or ""))
         err = device_id_error_message(device_id)
         if err:
             return web.json_response({"error": err}, status=400)
-        wxid = str(body.get("wxid") or session_fields.get("wxid") or "").strip()
-        if login_mode == "json":
-            if not wxid:
-                return web.json_response({"error": "JSON 导入缺少 wxid"}, status=400)
-            if not session_fields.get("SessionKey") or not session_fields.get("SharedKey"):
-                return web.json_response(
-                    {"error": "JSON 导入缺少 SessionKey 或 SharedKey"}, status=400
-                )
+        wxid = str(body.get("wxid") or "").strip()
         accounts = load_accounts_safe()
         dup_idx = find_duplicate_wxid_index(accounts, wxid)
         if dup_idx is not None:
@@ -211,7 +193,6 @@ class AdminWebApp:
             "remark": remark,
             "proxy": body.get("proxy"),
             "login_mode": login_mode,
-            **session_fields,
         }
         accounts.append(acc)
         save_accounts(accounts)
@@ -250,10 +231,6 @@ class AdminWebApp:
             accounts[idx]["login_mode"] = normalize_login_mode(
                 body.get("login_mode", "local")
             )
-        session_fields = extract_session_import_fields(body)
-        if session_fields:
-            accounts[idx].update(session_fields)
-            accounts[idx].pop("import_connected", None)
         wxid = str(accounts[idx].get("wxid") or "").strip()
         dup_idx = find_duplicate_wxid_index(accounts, wxid, exclude_idx=idx)
         if dup_idx is not None:
@@ -311,64 +288,8 @@ class AdminWebApp:
         if idx < 0 or idx >= len(accounts):
             return web.json_response({"error": "账号不存在"}, status=404)
         account = accounts[idx]
-        if normalize_login_mode(account.get("login_mode", "local")) == "json":
-            await self.bot_service.start_json_one(
-                account, accounts, idx, wait_ready=False
-            )
-            return web.json_response({"ok": True})
         await self.bot_service.start_one(account, accounts, idx)
         return web.json_response({"ok": True})
-
-    async def api_account_import_test(self, request: web.Request) -> web.Response:
-        idx = int(request.match_info["idx"])
-        accounts = load_accounts_safe()
-        if idx < 0 or idx >= len(accounts):
-            return web.json_response({"error": "账号不存在"}, status=404)
-        account = accounts[idx]
-        if normalize_login_mode(account.get("login_mode", "local")) != "json":
-            return web.json_response({"error": "仅 JSON 导入账号可测试连接"}, status=400)
-        missing = validate_import_user_account(account)
-        if missing:
-            return web.json_response({"error": NEED_REFRESH_JSON_HINT}, status=400)
-        try:
-            result = await self.bot_service.start_json_one(
-                account, accounts, idx, wait_ready=True
-            )
-        except JsonImportError as e:
-            if e.session_cleared:
-                save_accounts(accounts)
-            await self.bot_service.stop_for_account(idx)
-            logger.warning(
-                "ImportUser 失败 idx={} wxid={} code={} msg={} session_cleared={}",
-                idx,
-                account.get("wxid"),
-                e.code,
-                e.message,
-                e.session_cleared,
-            )
-            return web.json_response(
-                {
-                    "error": e.message,
-                    "code": e.code,
-                    "session_cleared": e.session_cleared,
-                },
-                status=502,
-            )
-        logger.info(
-            "ImportUser 成功并已上线 idx={} wxid={} profile_updated={}",
-            idx,
-            account.get("wxid"),
-            result.get("profile_updated"),
-        )
-        return web.json_response(
-            {
-                "ok": True,
-                "data": result.get("data"),
-                "nickname": result.get("nickname"),
-                "avatar_url": result.get("avatar_url"),
-                "profile_updated": result.get("profile_updated"),
-            }
-        )
 
     async def api_stop_one(self, request: web.Request) -> web.Response:
         idx = int(request.match_info["idx"])

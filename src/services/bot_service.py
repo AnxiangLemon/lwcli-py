@@ -28,20 +28,11 @@ prepare_runtime()
 load_dotenv(env_file())
 
 from lwapi import LwApiClient
-from lwapi.events_utils import events_ws_enabled
-from lwapi.exceptions import ApiError, HttpError, LoginError
+from lwapi.exceptions import LoginError
 from lwapi.sync_utils import SyncMode, normalize_sync_mode
 
 from src.account_loader import load_accounts_safe, save_accounts
-from src.login_service import (
-    LoginService,
-    apply_import_user_profile,
-    build_import_user_payload,
-    clear_session_import_fields,
-    format_import_user_error,
-    normalize_login_mode,
-    parse_import_user_profile,
-)
+from src.login_service import LoginService, normalize_login_mode
 from src.relay_login_service import RelayLoginService
 from src.message_handler import default_message_handler
 from src.plugins.lifecycle import notify_bot_offline, notify_bot_online
@@ -51,7 +42,6 @@ from src.runtime.client_registry import (
     register_online_client,
     unregister_online_client,
 )
-from src.runtime.events_ws_holder import subscribe_events_ws, unsubscribe_events_ws
 from src.utils import log_account_ctx, setup_logger, effective_account_remark
 
 BASE_URL = os.getenv("LWAPI_BASE_URL", "http://localhost:8081")
@@ -61,9 +51,6 @@ DEFAULT_MSG_SYNC_MODE: SyncMode = normalize_sync_mode(
 )
 _WS_EXHAUSTED_STOP_MESSAGE = (
     "WebSocket 重连失败已达上限，账号已自动停止，请手动重新启动"
-)
-_EVENTS_WS_EXHAUSTED_STOP_MESSAGE = (
-    "EVENT_WS 重连失败已达上限，账号已自动停止，请手动重新启动"
 )
 
 
@@ -86,22 +73,6 @@ def _merge_account_profile(
     return changed
 
 
-class JsonImportError(Exception):
-    """JSON 账号 ImportUser 或上线等待失败。"""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        code: int | str = "",
-        session_cleared: bool = False,
-    ) -> None:
-        super().__init__(message)
-        self.message = message
-        self.code = code
-        self.session_cleared = session_cleared
-
-
 def _env_int(name: str, default: int, minimum: int) -> int:
     try:
         v = int(os.getenv(name, str(default)))
@@ -115,7 +86,6 @@ class BotService:
 
     def __init__(self, account_events: Optional[AccountEventHub] = None) -> None:
         self._tasks: Dict[int, asyncio.Task] = {}
-        self._json_ready_futures: Dict[int, asyncio.Future] = {}
         self._lock = asyncio.Lock()
         self._events = account_events
         self._login_pending: Set[int] = set()
@@ -138,66 +108,6 @@ class BotService:
                 self._run_single_bot(account, all_accounts, account_idx),
                 name=f"bot-{account_idx}-{remark[:40]}",
             )
-
-    async def start_json_one(
-        self,
-        account: dict,
-        all_accounts: list,
-        account_idx: int,
-        *,
-        wait_ready: bool = True,
-        timeout: float = 90.0,
-    ) -> dict:
-        """
-        启动 JSON 导入账号常驻任务：ImportUser → 注册 client → 保活。
-
-        wait_ready 为 True 时阻塞至 ImportUser 成功并返回资料摘要；失败抛出 JsonImportError。
-        """
-        if normalize_login_mode(account.get("login_mode", "local")) != "json":
-            raise ValueError("仅 JSON 导入账号可调用 start_json_one")
-
-        remark = effective_account_remark(account)
-        ready_fut: Optional[asyncio.Future] = None
-
-        async with self._lock:
-            task = self._tasks.get(account_idx)
-            if task is not None and not task.done():
-                await self._cancel_task_unlocked(account_idx, task)
-
-            if wait_ready:
-                ready_fut = asyncio.get_running_loop().create_future()
-                self._json_ready_futures[account_idx] = ready_fut
-
-            self._tasks[account_idx] = asyncio.create_task(
-                self._run_json_bot(account, all_accounts, account_idx),
-                name=f"json-bot-{account_idx}-{remark[:40]}",
-            )
-
-        if not wait_ready or ready_fut is None:
-            return {}
-
-        try:
-            return await asyncio.wait_for(ready_fut, timeout=timeout)
-        except asyncio.TimeoutError:
-            await self.stop_for_account(account_idx, remark=remark)
-            raise JsonImportError("ImportUser 超时", code="timeout") from None
-        except asyncio.CancelledError:
-            raise JsonImportError("ImportUser 已取消", code="canceled") from None
-
-    async def _cancel_task_unlocked(
-        self, account_idx: int, task: asyncio.Task
-    ) -> None:
-        """在已持有 _lock 时取消任务并等待结束。"""
-        self._tasks.pop(account_idx, None)
-        ready = self._json_ready_futures.pop(account_idx, None)
-        if ready is not None and not ready.done():
-            ready.cancel()
-        if not task.done():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
 
     async def start_all(self, accounts: list) -> None:
         """顺序尝试启动列表中每个账号（已运行的槽位会被 start_one 跳过）。"""
@@ -224,27 +134,6 @@ class BotService:
             except asyncio.CancelledError:
                 pass
         return True
-
-    async def stop_json_bots_on_events_ws_exhausted(self) -> None:
-        """EVENT_WS 重连耗尽时停止所有在线 JSON 账号。"""
-        accounts = load_accounts_safe()
-        running = self.running_account_indices()
-        for i, acc in enumerate(accounts):
-            if normalize_login_mode(acc.get("login_mode")) != "json":
-                continue
-            if i not in running:
-                continue
-            remark = effective_account_remark(acc)
-            if self._events:
-                await self._events.emit(
-                    i,
-                    {
-                        "event": "bot_stopped",
-                        "reason": "ws_exhausted",
-                        "message": _EVENTS_WS_EXHAUSTED_STOP_MESSAGE,
-                    },
-                )
-            await self.stop_for_account(i, remark=remark)
 
     async def send_text_message(self, bot_wxid: str, to_wxid: str, content: str) -> dict:
         """
@@ -467,172 +356,3 @@ class BotService:
         finally:
             log_account_ctx.reset(ctx_token)
             self._login_pending.discard(account_idx)
-
-    def _resolve_json_ready_future(
-        self, account_idx: int, result: dict | BaseException
-    ) -> None:
-        ready = self._json_ready_futures.pop(account_idx, None)
-        if ready is None or ready.done():
-            return
-        if isinstance(result, BaseException):
-            ready.set_exception(result)
-        else:
-            ready.set_result(result)
-
-    async def _run_json_bot(
-        self, acc: dict, all_accounts: list, account_idx: int
-    ) -> None:
-        """JSON 导入账号：ImportUser 后注册在线客户端，收消息走 EVENT_WS（若已开启）。
-
-        会话与环境由 LwApi 服务端在 ImportUser 后维护，不启动 SecAutoAuth 环境刷新。
-        """
-        remark = effective_account_remark(acc)
-        ctx_token = log_account_ctx.set(remark)
-        bot_logger = setup_logger(remark)
-        wxid = ""
-
-        try:
-            try:
-                payload = build_import_user_payload(acc)
-            except ValueError as e:
-                self._resolve_json_ready_future(account_idx, JsonImportError(str(e)))
-                bot_logger.warning(f"【{remark}】JSON 会话字段不完整: {e}")
-                return
-
-            wxid = str(payload.get("wxid") or acc.get("wxid") or "").strip()
-            use_events_ws = False
-
-            async with LwApiClient(BASE_URL) as client:
-                try:
-                    try:
-                        data = await client.login.import_user(payload)
-                    except ApiError as e:
-                        err_msg = format_import_user_error(
-                            e.message or "ImportUser 失败"
-                        )
-                        session_cleared = clear_session_import_fields(acc)
-                        acc.pop("import_connected", None)
-                        save_accounts(all_accounts)
-                        self._resolve_json_ready_future(
-                            account_idx,
-                            JsonImportError(
-                                err_msg,
-                                code=e.code,
-                                session_cleared=session_cleared,
-                            ),
-                        )
-                        bot_logger.warning(
-                            f"【{remark}】ImportUser 失败: {e.message}"
-                        )
-                        return
-                    except HttpError as e:
-                        err_msg = format_import_user_error(
-                            e.message or "请求 LwApi 失败"
-                        )
-                        self._resolve_json_ready_future(
-                            account_idx,
-                            JsonImportError(err_msg, code=e.status_code),
-                        )
-                        bot_logger.warning(
-                            f"【{remark}】ImportUser 请求失败: {e.message}"
-                        )
-                        return
-
-                    profile_updated = apply_import_user_profile(acc, data)
-                    acc["import_connected"] = True
-                    save_accounts(all_accounts)
-                    nickname, avatar_url = parse_import_user_profile(data)
-                    self._resolve_json_ready_future(
-                        account_idx,
-                        {
-                            "data": data,
-                            "nickname": acc.get("nickname") or nickname,
-                            "avatar_url": acc.get("avatar_url") or avatar_url,
-                            "profile_updated": profile_updated,
-                        },
-                    )
-
-                    client.set_wxid(wxid)
-
-                    hold = asyncio.get_running_loop().create_future()
-                    ws_gave_up = False
-
-                    async def on_msg_ws_exhausted() -> None:
-                        nonlocal ws_gave_up
-                        ws_gave_up = True
-                        if not hold.done():
-                            hold.set_result(None)
-
-                    if not events_ws_enabled():
-                        sync_mode = DEFAULT_MSG_SYNC_MODE
-                        client.msg.start(
-                            handler=default_message_handler,
-                            mode=sync_mode,
-                            wxid=wxid,
-                            on_ws_exhausted=on_msg_ws_exhausted
-                            if sync_mode == "websocket"
-                            else None,
-                        )
-                        recv_label = (
-                            "WebSocket"
-                            if sync_mode == "websocket"
-                            else "HTTP 长轮询"
-                        )
-                    else:
-                        recv_label = "EVENT_WS"
-
-                    await register_online_client(wxid, client)
-                    await notify_bot_online(client)
-                    if events_ws_enabled():
-                        await subscribe_events_ws()
-                        use_events_ws = True
-
-                    bot_logger.success(
-                        f"【{remark}】JSON 账号已上线，wxid={wxid}，收消息={recv_label}"
-                    )
-
-                    if self._events:
-                        await self._events.emit(
-                            account_idx,
-                            {
-                                "event": "bot_online",
-                                "wxid": wxid,
-                                "sync_mode": "events_ws"
-                                if events_ws_enabled()
-                                else DEFAULT_MSG_SYNC_MODE,
-                                "message": f"JSON 账号已上线（收消息={recv_label}）",
-                            },
-                        )
-
-                    await hold
-                except asyncio.CancelledError:
-                    bot_logger.info(f"【{remark}】JSON 账号已停止")
-                    raise
-                except Exception as e:
-                    bot_logger.exception(f"【{remark}】JSON 账号运行异常: {e}")
-                    self._resolve_json_ready_future(
-                        account_idx, JsonImportError(str(e))
-                    )
-                else:
-                    if ws_gave_up:
-                        bot_logger.error(
-                            f"【{remark}】{_WS_EXHAUSTED_STOP_MESSAGE}"
-                        )
-                        if self._events:
-                            await self._events.emit(
-                                account_idx,
-                                {
-                                    "event": "bot_stopped",
-                                    "reason": "ws_exhausted",
-                                    "message": _WS_EXHAUSTED_STOP_MESSAGE,
-                                },
-                            )
-                finally:
-                    if use_events_ws:
-                        await unsubscribe_events_ws()
-                    if wxid:
-                        await notify_bot_offline(wxid)
-                        await unregister_online_client(wxid)
-        finally:
-            log_account_ctx.reset(ctx_token)
-            self._json_ready_futures.pop(account_idx, None)

@@ -413,10 +413,6 @@ class LoginClient:
                 pass
 
     # ==================== 其他登录相关接口 ====================
-    async def import_user(self, payload: dict) -> Any:
-        """导入外部已登录会话（ImportUser）。"""
-        return await self.t.post("/Login/ImportUser", json=payload)
-
     async def logout(self) -> bool:
         """退出登录并停止缓存刷新等后台任务。"""
         await self.join_background_tasks()

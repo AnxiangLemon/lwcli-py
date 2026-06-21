@@ -10,7 +10,7 @@
 
 | 模块 | 说明 |
 |------|------|
-| `lwapi/` | LwApi 异步 SDK：登录、消息同步与发送、Events WebSocket 等 |
+| `lwapi/` | LwApi 异步 SDK：登录、Relay 中继、消息同步与发送等 |
 | Web 运维台 | 多账号管理、扫码登录、插件开关、消息与日志查看 |
 | 插件系统 | `plugins/lwplugin_*.py` 扩展消息处理与生命周期钩子 |
 | 消息入库 | 自动写入 `config/messages.sqlite`，供运维台「消息」页查询 |
@@ -58,7 +58,14 @@ python run.py
 
 在运维台添加账号后启动机器人。扫码登录时，请保持该账号详情页的 **WebSocket**（`/ws/account/{idx}`）连接，否则界面收不到二维码。
 
-账号数据保存在 `config/accounts.json`；支持 `remote`（远程扫码）、`local`（本机 MMTLS 中继）、`json`（导入已有会话）等登录模式，见 [docs/architecture.md](docs/architecture.md)。
+账号数据保存在 `config/accounts.json`。登录方式：
+
+| `login_mode` | 说明 |
+|--------------|------|
+| `remote`（默认） | 登录流程在 LwApi 服务端执行，运维台展示二维码 |
+| `local` | 客户端经 Relay 用本机网络直连微信 MMTLS；配置里若仍写 `relay` 会自动当作 `local` |
+
+登录成功后，消息接收由 `LWAPI_MSG_SYNC_MODE` 控制（WebSocket 或 HTTP 长轮询）。详见 [docs/architecture.md](docs/architecture.md)。
 
 ---
 
@@ -84,13 +91,11 @@ LWAPI_MSG_SYNC_MODE=websocket
 # 运维台登录 Token（留空则关闭鉴权）
 LWAPI_WEB_TOKEN=123123
 
+# 在线保活：SecAutoAuth 间隔（秒，默认 172800 = 48h）
+# LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS=172800
+
 # 日志
 LWAPI_LOG_LEVEL=INFO
-
-# Events WebSocket（JSON 账号收消息，可选）
-EVENT_WS_ENABLED=1
-EVENT_WS=ws://127.0.0.1:9725/api/ws/events
-EVENT_KEY=your_manage_key
 ```
 
 ### LwApi 与运维台
@@ -107,7 +112,7 @@ EVENT_KEY=your_manage_key
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `LWAPI_MSG_SYNC_MODE` | `websocket` | 扫码 / remote 账号的消息同步方式：`websocket` 或 `http` |
+| `LWAPI_MSG_SYNC_MODE` | `websocket` | 账号的消息同步方式：`websocket` 或 `http` |
 | `LWAPI_PLUGINS_DIR` | 项目根 `plugins/` | 插件扫描目录的绝对路径；多项目可共用一套插件 |
 
 ### 日志
@@ -129,27 +134,6 @@ EVENT_KEY=your_manage_key
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `LWAPI_SEC_AUTO_LOGIN_INTERVAL_SECONDS` | `172800`（48 小时） | 登录成功后周期性 `SecAutoAuth` 间隔（秒），最小 `3600` |
-
-### Events WebSocket（JSON 账号收消息）
-
-当账号 `login_mode` 为 `json`（通过 `ImportUser` 导入会话）时，消息可走 LwApi 管理端的 **Events WS hook**，而不依赖 per-account 的 `/ws/sync`。
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `EVENT_WS_ENABLED` | 未设置（关闭） | 设为 `1` / `true` / `yes` / `on` 时启用 Events WS |
-| `EVENT_WS` | — | 管理端 WebSocket 地址，如 `ws://127.0.0.1:9725/api/ws/events` |
-| `EVENT_KEY` | — | 管理端鉴权 key；客户端会自动附加为 URL 查询参数 `?key=...` |
-| `EVENT_WS_RECONNECT_MIN_SEC` | `5` | 断线重连初始等待（秒），最小 `1` |
-| `EVENT_WS_RECONNECT_MAX_SEC` | `120` | 断线重连最大等待（秒） |
-
-启用逻辑（见 `lwapi/events_utils.py`）：
-
-1. `EVENT_WS_ENABLED` 为真；
-2. `EVENT_WS` 与 `EVENT_KEY` 均非空。
-
-满足后，首个 JSON 账号上线时建立 WebSocket，消息经 `src/events_message_bridge.py` 分发给对应在线机器人与插件链；全部 JSON 账号下线后断开。连续重连失败达上限会停止相关账号，需手动重启。
-
-`remote` / `local` 账号仍使用 `LWAPI_MSG_SYNC_MODE` 指定的同步通道，与 Events WS 独立。
 
 ---
 
@@ -173,7 +157,7 @@ EVENT_KEY=your_manage_key
 插件是扩展业务的主要方式。框架在启动时扫描 `plugins/lwplugin_*.py`，运行时在 `config/plugins.json` 的 `enabled` 数组中决定**哪些插件参与**消息链与生命周期。
 
 ```text
-LwApi 消息同步 / EVENT_WS
+LwApi 消息同步（LWAPI_MSG_SYNC_MODE）
     │
     ▼
 composite_message_handler（src/plugins/chain.py）
@@ -278,7 +262,7 @@ lwapi-py/
 │   └── messages.sqlite       # 消息入库（框架维护）
 ├── src/
 │   ├── plugins/              # registry、chain、lifecycle
-│   ├── runtime/              # client_registry、events_ws_holder
+│   ├── runtime/              # client_registry
 │   ├── services/bot_service.py
 │   └── web/                  # 运维台前端与 API
 ├── docs/architecture.md      # 登录与消息架构说明

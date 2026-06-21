@@ -1,7 +1,7 @@
 [project]
 name = "lwapi-py"
 version = "0.1.0"
-description = "Lightweight Python SDK for LwApi (Weixin4.0)"
+description = "Lightweight Python SDK for LwApi"
 authors = [
     {name = "AnxiangLemon", email = "AnxiangLemon@163.com"}
 ]

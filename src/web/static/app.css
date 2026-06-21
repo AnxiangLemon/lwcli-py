@@ -1286,32 +1286,6 @@ html.theme-light .acc-avatar-placeholder {
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
-.badge-imported {
-  background: rgba(167, 139, 250, 0.14);
-  color: #c4b5fd;
-  border: 1px solid rgba(167, 139, 250, 0.38);
-}
-
-.badge-imported::before { background: #a78bfa; }
-
-.badge-refresh-json {
-  background: rgba(251, 191, 36, 0.12);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.38);
-  max-width: 100%;
-  white-space: normal;
-  line-height: 1.35;
-  text-align: left;
-}
-
-.badge-refresh-json::before { background: #f59e0b; }
-
-html.theme-light .badge-refresh-json {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.35);
-}
-
 .acc-row-meta {
   grid-area: meta;
   margin: 0;
@@ -2437,12 +2411,6 @@ html.theme-light .modal-field-label { color: var(--star-deep); }
   font-size: 0.82rem;
   outline: none;
   transition: all 0.18s;
-}
-
-.modal-json-textarea {
-  min-height: 180px;
-  resize: vertical;
-  line-height: 1.45;
 }
 
 .modal-form-error {
