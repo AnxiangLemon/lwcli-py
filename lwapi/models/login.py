@@ -12,7 +12,7 @@ class ProxyInfo(BaseModelWithConfig):
 
 class QRGetRequest(BaseModelWithConfig):
     """用于获取微信登录二维码的请求体"""
-    deviceId: str = Field(..., description="设备ID，用于标识登录设备")
+    clientUuid: str = Field(..., description="客户端安装种子，用于派生设备指纹")
     osType: int = Field(0, description="操作系统类型，默认为0（未知系统）")
     proxy: Optional[ProxyInfo] = None  # 代理信息，留空表示不使用代理
 

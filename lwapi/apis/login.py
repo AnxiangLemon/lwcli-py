@@ -245,7 +245,7 @@ class LoginClient:
         proxy: Optional[ProxyInfo] = None,
     ) -> QRGetResponse:
         """获取登录二维码"""
-        payload = QRGetRequest(deviceId=device_id, proxy=proxy)
+        payload = QRGetRequest(clientUuid=device_id, proxy=proxy)
         data = await self.t.post("/Login/GetQRCode", json=payload.model_dump())
         return QRGetResponse.model_validate(data)
 

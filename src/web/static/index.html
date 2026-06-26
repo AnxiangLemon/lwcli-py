@@ -237,19 +237,34 @@
           </div>
           <div id="modal-edit-manual-fields">
             <div class="modal-field">
-              <label for="modal-edit-device">device_id</label>
-              <input
-                type="text"
-                id="modal-edit-device"
-                class="modal-input device-id-input"
-                required
-                autocomplete="off"
-                spellcheck="false"
-              />
-            </div>
-            <div class="modal-field">
-              <label for="modal-edit-wxid">wxid（可空）</label>
-              <input type="text" id="modal-edit-wxid" class="modal-input" placeholder="留空可清空已保存的 wxid" autocomplete="off" spellcheck="false" />
+              <label for="modal-edit-device">clientUuid</label>
+              <div class="modal-input-row">
+                <input
+                  type="text"
+                  id="modal-edit-device"
+                  class="modal-input device-id-input"
+                  required
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  type="button"
+                  id="modal-edit-device-action"
+                  class="btn btn-ghost btn-device-action"
+                  title="重新生成 UUID"
+                  aria-label="重新生成 UUID"
+                  hidden
+                >
+                  <svg id="modal-edit-device-action-refresh" class="device-action-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M4 4v6h6M20 20v-6h-6"/>
+                    <path d="M5.6 9A7 7 0 0 1 19 7M18.4 15A7 7 0 0 1 5 17"/>
+                  </svg>
+                  <svg id="modal-edit-device-action-copy" class="device-action-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="9" y="9" width="11" height="11" rx="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           <div class="app-modal-actions">
@@ -518,8 +533,103 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       return String(s || '').trim();
     }
 
+    function generateClientUuid() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = (Math.random() * 16) | 0;
+        var v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
+
+    function refreshModalClientUuid() {
+      if (!isModalAddMode()) return;
+      var input = document.getElementById('modal-edit-device');
+      if (input) input.value = generateClientUuid();
+    }
+
+    function setModalDeviceActionMode(mode) {
+      var btn = document.getElementById('modal-edit-device-action');
+      var refreshIcon = document.getElementById('modal-edit-device-action-refresh');
+      var copyIcon = document.getElementById('modal-edit-device-action-copy');
+      if (!btn) return;
+      if (mode === 'refresh') {
+        btn.hidden = false;
+        btn.onclick = refreshModalClientUuid;
+        btn.title = '重新生成 UUID';
+        btn.setAttribute('aria-label', '重新生成 UUID');
+        if (refreshIcon) refreshIcon.classList.add('is-visible');
+        if (copyIcon) copyIcon.classList.remove('is-visible');
+      } else if (mode === 'copy') {
+        btn.hidden = false;
+        btn.onclick = copyModalClientUuid;
+        btn.title = '复制 clientUuid';
+        btn.setAttribute('aria-label', '复制 clientUuid');
+        if (refreshIcon) refreshIcon.classList.remove('is-visible');
+        if (copyIcon) copyIcon.classList.add('is-visible');
+      } else {
+        btn.hidden = true;
+        btn.onclick = null;
+        if (refreshIcon) refreshIcon.classList.remove('is-visible');
+        if (copyIcon) copyIcon.classList.remove('is-visible');
+      }
+    }
+
+    async function copyModalClientUuid() {
+      var input = document.getElementById('modal-edit-device');
+      var text = input ? normalizeDeviceId(input.value) : '';
+      if (!text) {
+        showToast('无可复制内容', 'warning');
+        return;
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        showToast('已复制 clientUuid', 'success');
+      } catch (err) {
+        showToast('复制失败', 'error');
+      }
+    }
+
+    function updateModalDeviceUuidField() {
+      var isAdd = isModalAddMode();
+      var manual = document.getElementById('modal-edit-manual-fields');
+      var manualVisible = manual && !manual.hidden;
+      var input = document.getElementById('modal-edit-device');
+      if (!input) return;
+      if (isAdd && manualVisible) {
+        input.readOnly = false;
+        input.disabled = false;
+        setModalDeviceActionMode('refresh');
+        if (!normalizeDeviceId(input.value)) {
+          input.value = generateClientUuid();
+        }
+      } else if (!isAdd && manualVisible) {
+        input.readOnly = true;
+        input.disabled = true;
+        setModalDeviceActionMode('copy');
+      } else {
+        input.readOnly = false;
+        input.disabled = false;
+        setModalDeviceActionMode('none');
+      }
+    }
+
     function deviceIdValidationError(did) {
-      if (!did) return 'device_id 不能为空';
+      if (!did) return 'clientUuid 不能为空';
       return null;
     }
 
@@ -551,7 +661,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       const nick = state.nickName || '';
       const avatar = state.headImgUrl || '';
       const map = {
-        waiting: { cls: 'info', title: '', text: '请使用微信扫描二维码' },
+        waiting: { cls: 'info', title: '', text: '请使用手机扫描二维码' },
         scanned: { cls: 'info', title: nick, text: '已扫码，请在手机上点【登录】' },
         confirming: { cls: 'info', title: nick, text: '正在确认登录…' },
         canceled: { cls: 'warn', title: nick, text: '已取消登录' },
@@ -836,10 +946,12 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       if (isAdd && !mode) {
         if (manual) manual.hidden = true;
         if (deviceInput) deviceInput.required = false;
+        setModalDeviceActionMode('none');
         return;
       }
       if (manual) manual.hidden = false;
       if (deviceInput) deviceInput.required = !!mode;
+      updateModalDeviceUuidField();
     }
 
     function setModalLoginMode(mode) {
@@ -1164,7 +1276,6 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       document.getElementById('modal-edit-index').value = '';
       document.getElementById('modal-edit-device').value = '';
       document.getElementById('modal-edit-remark').value = '';
-      document.getElementById('modal-edit-wxid').value = '';
       clearModalLoginModeSelection();
       updateModalLoginModePanels();
       var submitBtn = document.getElementById('modal-edit-submit');
@@ -1361,11 +1472,11 @@ function openConfirmModal(opts) {
       document.getElementById('modal-edit-index').value = String(index);
       document.getElementById('modal-edit-device').value = acc.device_id || '';
       document.getElementById('modal-edit-remark').value = acc.remark || '';
-      document.getElementById('modal-edit-wxid').value = acc.wxid || '';
       setModalLoginMode(acc.login_mode || 'local');
+      updateModalDeviceUuidField();
       openAppModal();
       setTimeout(function () {
-        var el = document.getElementById('modal-edit-device');
+        var el = document.getElementById('modal-edit-remark');
         if (el) el.focus();
       }, 30);
     }
@@ -1384,29 +1495,19 @@ function openConfirmModal(opts) {
       }
       var body;
       var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
-      var wxid = document.getElementById('modal-edit-wxid').value.trim();
-      var didErr = deviceIdValidationError(device_id);
-      if (didErr) {
-        showModalFormError(didErr);
-        return;
+      if (isAdd) {
+        var didErr = deviceIdValidationError(device_id);
+        if (didErr) {
+          showModalFormError(didErr);
+          return;
+        }
+        body = { device_id: device_id, remark: remark, login_mode: login_mode };
+      } else {
+        body = { remark: remark, login_mode: login_mode };
       }
-      body = { device_id: device_id, remark: remark, login_mode: login_mode };
-      if (wxid) body.wxid = wxid;
       if (isAdd && !remark) {
         showModalFormError('请填写机器人备注');
         return;
-      }
-      var wxidForDup = body.wxid ? String(body.wxid).trim() : '';
-      if (wxidForDup) {
-        var dupIdx = findDuplicateWxidIndex(
-          wxidForDup,
-          isAdd ? null : parseInt(indexVal, 10)
-        );
-        if (dupIdx >= 0) {
-          var dupAcc = _lastAccountsPayload[dupIdx];
-          showModalFormError(wxidConflictMessage(wxidForDup, dupAcc && dupAcc.remark));
-          return;
-        }
       }
       if (btn) btn.disabled = true;
       try {

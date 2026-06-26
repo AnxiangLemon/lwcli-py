@@ -152,7 +152,7 @@ class RelayClient:
             req = InitPrepareRequest(sessionId=self._session_id)
         else:
             req = InitPrepareRequest(
-                deviceId=device_id,
+                clientUuid=device_id,
                 osType=os_type,
                 proxy=proxy or RelayProxyInfo(),
             )

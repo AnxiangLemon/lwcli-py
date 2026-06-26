@@ -24,7 +24,7 @@ class HttpSpec(BaseModelWithConfig):
 
 
 class InitPrepareRequest(BaseModelWithConfig):
-    deviceId: Optional[str] = None
+    clientUuid: Optional[str] = None
     osType: int = 0
     proxy: Optional[RelayProxyInfo] = None
     sessionId: Optional[str] = None

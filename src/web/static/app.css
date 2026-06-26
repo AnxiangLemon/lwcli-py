@@ -2447,6 +2447,47 @@ html.theme-light .modal-input {
   letter-spacing: 0.03em;
 }
 
+.modal-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.modal-input-row .modal-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-device-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 0 10px;
+}
+
+.btn-device-action[hidden] {
+  display: none !important;
+}
+
+.btn-device-action .device-action-icon {
+  display: none;
+}
+
+.btn-device-action .device-action-icon.is-visible {
+  display: block;
+}
+
+.modal-input:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+html.theme-light .modal-input:disabled {
+  background: rgba(12, 18, 36, 0.04);
+}
+
 .app-modal-actions {
   display: flex;
   flex-wrap: wrap;
