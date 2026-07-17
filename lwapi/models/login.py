@@ -1,5 +1,5 @@
 # models/login.py
-from pydantic import  Field,BaseModel,ConfigDict
+from pydantic import Field, BaseModel, ConfigDict, AliasChoices
 from typing import Optional
 from ..models import BaseModelWithConfig
 
@@ -21,7 +21,16 @@ class QRGetResponse(BaseModelWithConfig):
     qr_code: str = Field(..., alias="QrBase64", description="二维码的 Base64 图像")
     qr_url: str = Field(..., alias="QrUrl", description="二维码的 URL")
     expired_time: int = Field(..., alias="ExpiredTime", description="二维码的过期时间（秒）")
-    device_id: str = Field(..., alias="DeviceId", description="设备 ID")
+    client_uuid: str = Field(
+        "",
+        validation_alias=AliasChoices("ClientUuid", "clientUuid", "client_uuid"),
+        description="客户端安装种子（可回写配置；与 DeviceId 不同）",
+    )
+    device_id: str = Field(
+        "",
+        validation_alias=AliasChoices("DeviceId", "deviceId", "device_id"),
+        description="服务端派生设备指纹，仅存档，不可用于后续请求",
+    )
     uuid: str = Field(..., alias="Uuid", description="二维码 ID")
        
 class QRCheckResponse(BaseModel):

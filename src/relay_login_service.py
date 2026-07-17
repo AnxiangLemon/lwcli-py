@@ -3,6 +3,8 @@
 
 客户端按 lwapi 下发的 HttpSpec 用本机网络 POST 微信 MMTLS；
 服务端负责组包、加解密与会话存储。与 LoginService（远程登录）并存。
+
+clientUuid 为请求种子；API 返回的 deviceId 仅存档，不可用于后续请求。
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ class RelayLoginService:
 
     def __init__(self, client, device_id: str, proxy=None, remark: str = ""):
         self.client = client
+        # accounts.json 的 device_id 字段实为 clientUuid 种子
         self.device_id = device_id
         self.proxy = self._to_relay_proxy(proxy)
         self.remark = remark
@@ -46,8 +49,11 @@ class RelayLoginService:
         self,
         saved_wxid: str = "",
         emit: Optional[EmitFn] = None,
-    ) -> Tuple[str, str]:
+    ) -> Tuple[str, str, str]:
+        """返回 (wxid, client_uuid, archived_device_id)。"""
         relay = self.client.relay
+        client_uuid = self.device_id
+        archived = ""
 
         if saved_wxid:
             self.client.set_wxid(saved_wxid)
@@ -58,7 +64,16 @@ class RelayLoginService:
             )
             if result and result.get("wxid"):
                 wxid = str(result["wxid"])
-                device_id = str(result.get("deviceId") or self.device_id)
+                seed = str(
+                    result.get("clientUuid")
+                    or result.get("client_uuid")
+                    or self.device_id
+                ).strip()
+                if seed:
+                    client_uuid = seed
+                archived = str(
+                    result.get("deviceId") or result.get("device_id") or ""
+                ).strip()
                 root_logger.success(f"【{self.remark}】local 二次登录成功 → {wxid}")
                 if emit:
                     await emit(
@@ -68,7 +83,7 @@ class RelayLoginService:
                             "message": "已使用本地缓存登录，无需扫码",
                         }
                     )
-                return wxid, device_id
+                return wxid, client_uuid, archived
 
         if not emit:
             raise LoginError(
@@ -78,17 +93,19 @@ class RelayLoginService:
 
         root_logger.info(f"【{self.remark}】local 正在获取二维码...")
         wxid: Optional[str] = None
-        device_out = self.device_id
         async for ev in relay.qr_login_poll(
             self.device_id,
             proxy=self.proxy,
         ):
             await emit(ev)
+            if ev.get("event") == "qr_ready":
+                seed = str(ev.get("device_id") or "").strip()
+                if seed:
+                    client_uuid = seed
+                archived = str(ev.get("archived_device_id") or archived).strip()
             if ev.get("event") == "success":
                 wxid = ev.get("wxid")
                 break
-            if ev.get("event") == "qr_ready":
-                device_out = ev.get("device_id") or device_out
             if ev.get("event") == "error":
                 code = str(ev.get("code") or "")
                 raise LoginError(
@@ -101,4 +118,4 @@ class RelayLoginService:
 
         self.client.set_wxid(wxid)
         root_logger.success(f"【{self.remark}】local 登录成功！wxid = {wxid}")
-        return wxid, device_out
+        return wxid, client_uuid, archived

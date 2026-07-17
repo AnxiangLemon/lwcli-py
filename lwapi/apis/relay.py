@@ -421,11 +421,21 @@ class RelayClient:
             return
 
         qr_image = qr_result.get("qrImage") or ""
-        device_out = qr_result.get("deviceId") or device_id
+        client_out = str(
+            qr_result.get("clientUuid")
+            or qr_result.get("client_uuid")
+            or device_id
+            or ""
+        ).strip() or device_id
+        archived = str(
+            qr_result.get("deviceId") or qr_result.get("device_id") or ""
+        ).strip()
         yield {
             "event": "qr_ready",
             "qr_image": qr_image,
-            "device_id": device_out,
+            # device_id 对外仍表示 clientUuid 种子（与 accounts.json 字段一致）
+            "device_id": client_out,
+            "archived_device_id": archived,
         }
 
         last_scan_state: Optional[int] = None

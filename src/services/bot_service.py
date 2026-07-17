@@ -2,7 +2,8 @@
 多账号机器人运行时：每个账号一个 asyncio.Task，内部循环为「登录 → 收消息」。
 
 职责概要：
-- 使用 accounts.json 行下标作为任务字典键；登录后 device_id 可能回写，不宜再用备注+device_id 作键；
+- 使用 accounts.json 行下标作为任务字典键；登录后 clientUuid 种子保持稳定，
+  服务端 DeviceId 仅写入 archived_device_id，不再覆盖 device_id；
 - 调用 LoginService 完成登录，经 AccountEventHub 向 Web 推送扫码/错误；
 - 登录成功后启动 LoginClient 内在线维持任务（默认每 48h SecAutoAuth）；
   心跳与环境上报由服务端维护，客户端不再单独发送 HeartBeat / Reportclientcheck。
@@ -215,14 +216,17 @@ class BotService:
                                 client, device_id, proxy, remark
                             )
                         use_emit = self._events is not None
-                        wxid, real_device_id = await login_service.login(
+                        wxid, client_uuid, archived_device_id = await login_service.login(
                             saved_wxid,
                             emit=emit if use_emit else None,
                         )
 
                         saved_wxid = wxid
-                        device_id = real_device_id
-                        acc["device_id"] = real_device_id
+                        if client_uuid:
+                            device_id = client_uuid
+                            acc["device_id"] = client_uuid
+                        if archived_device_id:
+                            acc["archived_device_id"] = archived_device_id
                         acc["wxid"] = wxid
                         save_accounts(all_accounts)
                         self._login_pending.discard(account_idx)

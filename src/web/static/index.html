@@ -237,7 +237,7 @@
           </div>
           <div id="modal-edit-manual-fields">
             <div class="modal-field">
-              <label for="modal-edit-device">clientUuid</label>
+              <label for="modal-edit-device">uuid</label>
               <div class="modal-input-row">
                 <input
                   type="text"
@@ -565,8 +565,8 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
       } else if (mode === 'copy') {
         btn.hidden = false;
         btn.onclick = copyModalClientUuid;
-        btn.title = '复制 clientUuid';
-        btn.setAttribute('aria-label', '复制 clientUuid');
+        btn.title = '复制 uuid';
+        btn.setAttribute('aria-label', '复制 uuid');
         if (refreshIcon) refreshIcon.classList.remove('is-visible');
         if (copyIcon) copyIcon.classList.add('is-visible');
       } else {
@@ -598,7 +598,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
           document.execCommand('copy');
           document.body.removeChild(ta);
         }
-        showToast('已复制 clientUuid', 'success');
+        showToast('已复制 uuid', 'success');
       } catch (err) {
         showToast('复制失败', 'error');
       }
@@ -618,8 +618,8 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
           input.value = generateClientUuid();
         }
       } else if (!isAdd && manualVisible) {
-        input.readOnly = true;
-        input.disabled = true;
+        input.readOnly = false;
+        input.disabled = false;
         setModalDeviceActionMode('copy');
       } else {
         input.readOnly = false;
@@ -629,7 +629,7 @@ const VIEW_TITLES = { accounts: '账号列表', messages: '消息聚合', logs: 
     }
 
     function deviceIdValidationError(did) {
-      if (!did) return 'clientUuid 不能为空';
+      if (!did) return 'uuid 不能为空';
       return null;
     }
 
@@ -1493,22 +1493,17 @@ function openConfirmModal(opts) {
         showModalFormError('请选择登录方式');
         return;
       }
-      var body;
       var device_id = normalizeDeviceId(document.getElementById('modal-edit-device').value);
-      if (isAdd) {
-        var didErr = deviceIdValidationError(device_id);
-        if (didErr) {
-          showModalFormError(didErr);
-          return;
-        }
-        body = { device_id: device_id, remark: remark, login_mode: login_mode };
-      } else {
-        body = { remark: remark, login_mode: login_mode };
+      var didErr = deviceIdValidationError(device_id);
+      if (didErr) {
+        showModalFormError(didErr);
+        return;
       }
       if (isAdd && !remark) {
         showModalFormError('请填写机器人备注');
         return;
       }
+      var body = { device_id: device_id, remark: remark, login_mode: login_mode };
       if (btn) btn.disabled = true;
       try {
         if (isAdd) {

@@ -6,6 +6,9 @@
 
 若未传入 emit 且需要扫码，将抛出明确错误（请从网页启动并连接事件通道，
 或预先在 accounts.json 中配置有效 wxid）。
+
+返回值中的 client_uuid 是请求种子；DeviceId 仅作 archived_device_id 存档，
+不可再当作 clientUuid 去请求（与 lwcli-Rust 对齐）。
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ class LoginService:
 
     def __init__(self, client, device_id: str, proxy=None, remark: str = ""):
         self.client = client
+        # accounts.json 的 device_id 字段实为 clientUuid 种子
         self.device_id = device_id
         self.proxy = ProxyInfo(**proxy) if proxy else None
         self.remark = remark
@@ -42,13 +46,16 @@ class LoginService:
         self,
         saved_wxid: str = "",
         emit: Optional[EmitFn] = None,
-    ) -> Tuple[str, str]:
+    ) -> Tuple[str, str, str]:
         """
         先尝试缓存 wxid 二次登录；失败则拉二维码，经 emit 流式上报状态直至成功。
 
+        返回 (wxid, client_uuid, archived_device_id)。
         emit 为 None 时：仅当二次登录已成功时才能继续；否则无法展示二维码。
         """
         login = self.client.login
+        client_uuid = self.device_id
+        archived = ""
 
         if saved_wxid:
             self.client.set_wxid(saved_wxid)
@@ -62,10 +69,13 @@ class LoginService:
                             "message": "已使用本地缓存登录，无需扫码",
                         }
                     )
-                return saved_wxid, self.device_id
+                return saved_wxid, client_uuid, archived
 
         root_logger.info(f"【{self.remark}】正在获取二维码...")
         qr = await login.get_qr_code(self.device_id, self.proxy)
+        if (qr.client_uuid or "").strip():
+            client_uuid = qr.client_uuid.strip()
+        archived = (qr.device_id or "").strip()
 
         if not emit:
             raise LoginError(
@@ -81,7 +91,8 @@ class LoginService:
                 "uuid": qr.uuid,
                 "qr_base64": png_b64,
                 "qr_url": scan_url,
-                "device_id": qr.device_id,
+                "device_id": client_uuid,
+                "archived_device_id": archived,
             }
         )
         wxid: Optional[str] = None
@@ -104,4 +115,4 @@ class LoginService:
 
         self.client.set_wxid(wxid)
         root_logger.success(f"【{self.remark}】登录成功！wxid = {wxid}")
-        return wxid, qr.device_id
+        return wxid, client_uuid, archived

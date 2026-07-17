@@ -2,7 +2,8 @@
 账号配置读写与「逻辑槽位」键。
 
 本模块负责 config/accounts.json。account_slot_key 可用于日志等场景区分同行配置；
-机器人任务以 accounts.json 行下标跟踪，因扫码登录后 device_id 可能被服务端回写。
+机器人任务以 accounts.json 行下标跟踪。device_id 存 clientUuid 种子（稳定），
+服务端派生的 DeviceId 另存 archived_device_id，不覆盖种子。
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ CONFIG_FILE = Path("config/accounts.json")
 
 
 def account_slot_key(account: dict) -> str:
-    """生成该行账号在运行期使用的唯一键（备注 + 设备 ID）。"""
+    """生成该行账号在运行期使用的唯一键（备注 + clientUuid 种子）。"""
     did = str(account.get("device_id") or "").strip()
     remark = str(account.get("remark") or "").strip()
     if not remark:
@@ -75,7 +76,7 @@ def load_accounts() -> List[Dict]:
 
 
 def save_accounts(accounts: List[Dict]) -> None:
-    """原子写入账号列表（登录成功后可能回写 wxid / 真实 device_id）。"""
+    """原子写入账号列表（登录成功后回写 wxid；DeviceId 仅归档 archived_device_id）。"""
     atomic_write_json(CONFIG_FILE, accounts)
 
 
